@@ -1074,6 +1074,10 @@ Slider::Slider(SLIDERCURVETYPE stype, i32 repeat, f32 pixelLength, std::vector<v
     m_durationMS = m_durationMS >= 0 ? m_durationMS : 1;  // force clamp to positive range
 }
 
+// shared to avoid per-slider per-draw allocations
+static CONSTINIT std::vector<vec2> alwaysPointsBuf;
+static CONSTINIT std::vector<vec2> legacyScreenPointsBuf;
+
 void Slider::draw() {
     if(m_ctrlPoints.size() <= 0) return;
 
@@ -1228,15 +1232,14 @@ void Slider::draw() {
     const bool slider_fading_out = m_endSliderBodyFadeAnimation > 0.0f && m_endSliderBodyFadeAnimation != 1.0f;
 
     if(!hd && !instafade_slider_body && slider_fading_out) {
-        std::vector<vec2> emptyVector;
-        std::vector<vec2> alwaysPoints;
-        alwaysPoints.push_back(m_pf->osuCoords2Pixels(curvePointAt(m_slidePct)));
+        alwaysPointsBuf.clear();
+        alwaysPointsBuf.push_back(m_pf->osuCoords2Pixels(curvePointAt(m_slidePct)));
         if(!cv::slider_shrink.getBool())
             drawBody(1.0f - m_endSliderBodyFadeAnimation, 0, 1);
         else if(cv::slider_body_lazer_fadeout_style.getBool())
             SliderRenderer::draw(SliderRenderer::DrawLegacyParams{
                 osu->getVirtScreenSize(), osu->getSliderFrameBuffer(), SliderRenderer::SkinSettings{m_pf->getSkin()},
-                emptyVector, alwaysPoints, m_pf->fHitcircleDiameter, 0.0f, 0.0f,
+                /*points=*/{}, alwaysPointsBuf, m_pf->fHitcircleDiameter, 0.0f, 0.0f,
                 m_pf->getSkin()->getComboColorForCounter(m_colorCounter, m_colorOffset), 1.0f,
                 1.0f - m_endSliderBodyFadeAnimation, m_clickTimeMS});
     }
@@ -1447,26 +1450,26 @@ void Slider::drawEndCircle(f32 alpha, f32 sliderSnake) {
 }
 
 void Slider::drawBody(f32 alpha, f32 from, f32 to) {
+    alwaysPointsBuf.clear();
     // smooth begin/end while snaking/shrinking
-    std::vector<vec2> alwaysPoints;
     if(cv::slider_body_smoothsnake.getBool()) {
         if(cv::slider_shrink.getBool() && m_sliderSnakePercent > 0.999f) {
-            alwaysPoints.push_back(m_pf->osuCoords2Pixels(curvePointAt(m_slidePct)));  // curpoint
-            alwaysPoints.push_back(m_pf->osuCoords2Pixels(
+            alwaysPointsBuf.push_back(m_pf->osuCoords2Pixels(curvePointAt(m_slidePct)));  // curpoint
+            alwaysPointsBuf.push_back(m_pf->osuCoords2Pixels(
                 getRawPosAt(getEndTime() + 1)));  // endpoint (because setDrawPercent() causes the last
                                                   // circle mesh to become invisible too quickly)
         }
         if(cv::snaking_sliders.getBool() && m_sliderSnakePercent < 1.0f)
-            alwaysPoints.push_back(
+            alwaysPointsBuf.push_back(
                 m_pf->osuCoords2Pixels(curvePointAt(m_sliderSnakePercent)));  // snakeoutpoint (only while snaking out)
     }
 
     const Color undimmedComboColor = m_pf->getSkin()->getComboColorForCounter(m_colorCounter, m_colorOffset);
 
     if(osu->shouldFallBackToLegacySliderRenderer()) {
-        std::vector<vec2> screenPoints;
-        Mc::ranges::assign(screenPoints, m_curve.getPoints());
-        for(auto &screenPoint : screenPoints) {
+        legacyScreenPointsBuf.clear();
+        Mc::ranges::assign(legacyScreenPointsBuf, m_curve.getPoints());
+        for(auto &screenPoint : legacyScreenPointsBuf) {
             screenPoint = m_pf->osuCoords2Pixels(screenPoint - m_stackOffset);
         }
 
@@ -1474,8 +1477,8 @@ void Slider::drawBody(f32 alpha, f32 from, f32 to) {
         SliderRenderer::draw(SliderRenderer::DrawLegacyParams{.screenRect = osu->getVirtScreenSize(),
                                                               .rt = osu->getSliderFrameBuffer(),
                                                               .skinSettings = {m_pf->getSkin()},
-                                                              .points = screenPoints,
-                                                              .alwaysPoints = alwaysPoints,
+                                                              .points = legacyScreenPointsBuf,
+                                                              .alwaysPoints = alwaysPointsBuf,
                                                               .hitcircleDiameter = m_pf->fHitcircleDiameter,
                                                               .from = from,
                                                               .to = to,
@@ -1514,7 +1517,7 @@ void Slider::drawBody(f32 alpha, f32 from, f32 to) {
                                                            .skinSettings = {m_pf->getSkin()},
                                                            .vao = m_vao.get(),
                                                            .bounds = vec4{minBounds, maxBounds},
-                                                           .alwaysPoints = alwaysPoints,
+                                                           .alwaysPoints = alwaysPointsBuf,
                                                            .translation = translation,
                                                            .scale = scale,
                                                            .hitcircleDiameter = m_pf->fHitcircleDiameter,
