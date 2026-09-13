@@ -16,7 +16,7 @@
 #include "Logging.h"
 #include "NotificationOverlay.h"
 #include "Osu.h"
-#include "OsuConfig.h"
+#include "Paths.h"
 #include "Parsing.h"
 #include "SongBrowser/SongBrowser.h"
 #include "SString.h"
@@ -40,7 +40,7 @@ struct Extracted {
 
 Extracted parse_extracted(std::string folder) {
     Extracted out{.folder = std::move(folder)};
-    if(!out.folder.empty()) out.diffs = Database::parseFolderDiffs(NEOMOD_MAPS_PATH "/" + out.folder + "/", false);
+    if(!out.folder.empty()) out.diffs = Database::parseFolderDiffs(Mc::Paths::maps() + "/" + out.folder + "/", false);
     return out;
 }
 
@@ -247,7 +247,7 @@ constexpr std::string_view ARCHIVE_CHARSET{"CP932"};
 // installer's own writes (see claim()): the mtime, or a sentinel for a folder that isn't there (an uninstall)
 fs::file_time_type folder_state(std::string_view folder) {
     std::error_code ec;
-    const auto mtime = fs::last_write_time(File::getFsPath(NEOMOD_MAPS_PATH "/" + std::string{folder}), ec);
+    const auto mtime = fs::last_write_time(File::getFsPath(Mc::Paths::maps() + "/" + std::string{folder}), ec);
     return ec ? fs::file_time_type::min() : mtime;
 }
 
@@ -309,7 +309,7 @@ std::string BeatmapInstaller::resolve_and_extract_osz(std::span<const u8> data, 
         debugLog("No usable name for the beatmapset folder of {:s}", osz_name);
         return {};
     }
-    if(!write_entries_to_dir(entries, fmt::format(NEOMOD_MAPS_PATH "/{}/", folder))) return {};
+    if(!write_entries_to_dir(entries, fmt::format("{}/{}/", Mc::Paths::maps(), folder))) return {};
     return folder;
 }
 
@@ -471,10 +471,11 @@ void BeatmapInstaller::uninstall(const DatabaseBeatmap* map, bool whole_set) {
     if(set->type != DatabaseBeatmap::BeatmapType::NEOMOD_BEATMAPSET) return;
     if(!db->isFinished() || db->isCancelled() || osu->isInPlayMode()) return;  // (see try_import)
 
-    // maps/ sets live directly under NEOMOD_MAPS_PATH, the only place this ever deletes from
+    // maps/ sets live directly under the maps dir, the only place this ever deletes from
+    const std::string maps_prefix = Mc::Paths::maps() + "/";
     std::string_view rel_view = set->getFolder();
-    if(!rel_view.starts_with(NEOMOD_MAPS_PATH "/")) return;
-    rel_view.remove_prefix(std::string_view{NEOMOD_MAPS_PATH "/"}.size());
+    if(!rel_view.starts_with(maps_prefix)) return;
+    rel_view.remove_prefix(maps_prefix.size());
     while(rel_view.ends_with('/')) rel_view.remove_suffix(1);
     if(rel_view.empty() || rel_view.contains('/')) return;
     const std::string rel{rel_view};
@@ -485,7 +486,7 @@ void BeatmapInstaller::uninstall(const DatabaseBeatmap* map, bool whole_set) {
     const std::string name =
         whole_set ? fmt::format("{} - {}", set->getArtist(), set->getTitle())
                   : fmt::format("{} - {} [{}]", map->getArtist(), map->getTitle(), map->getDifficultyName());
-    const std::string path = whole_set ? NEOMOD_MAPS_PATH "/" + rel : std::string{map->getFilePath()};
+    const std::string path = whole_set ? Mc::Paths::maps() + "/" + rel : std::string{map->getFilePath()};
 
     // the preview music streams from the folder, and an open file can't be deleted on windows
     auto* iface = osu->getMapInterface();

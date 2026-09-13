@@ -33,7 +33,6 @@
 
 #include "BaseEnvironment.h"
 #include "BanchoNetworking.h"  // defines some things we need like OSU_VERSION_DATEONLY
-#include "OsuConfig.h"
 namespace SliderRenderer {
 extern void onUniformConfigChanged();
 }
@@ -114,7 +113,7 @@ CONVAR(database_version, OSU_VERSION_DATEONLY, CLIENT | NOLOAD | NOSAVE,
 CONVAR(osu_folder, ""sv, CLIENT);
 CONVAR(osu_folder_sub_skins, "Skins/"sv, CLIENT);
 CONVAR(songs_folder, "Songs/"sv, CLIENT);
-CONVAR(export_folder, NEOMOD_DATA_DIR "exports/"sv, CLIENT, "path to export files to (like beatmaps, skins)");
+CONVAR(export_folder, ""sv, CLIENT, "path to export files to (like beatmaps, skins), empty = <data dir>/exports");
 
 // Looks
 CONVAR(always_render_cursor_trail, true, CLIENT | SKINS,

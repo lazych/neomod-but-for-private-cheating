@@ -118,6 +118,8 @@ std::optional<std::string> has_arg(ArgSwitch arg_switch) noexcept {
             return find_switch({"-nofpu"});
         case MISC_ASYNC_THREADS:
             return find_switch({"-async_threads"});
+        case MISC_DATA_DIR:
+            return find_switch({"-datadir"});
     }
     return std::nullopt;
 }

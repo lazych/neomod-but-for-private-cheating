@@ -15,6 +15,7 @@
 #include "Chat.h"
 #include "OsuConVars.h"
 #include "Environment.h"
+#include "Paths.h"
 #include "MakeDelegateWrapper.h"
 #include "Database.h"
 #include "DatabaseBeatmap.h"
@@ -173,12 +174,12 @@ class MainMenu::MainButton final : public UIButtonRounded {
 
 namespace {
 bool is_updating_from_old_version() {
-    if(!Environment::fileExists(NEOMOD_DATA_DIR "version.txt")) {
+    if(!Environment::fileExists(Mc::Paths::data() + "/version.txt")) {
         // no version.txt exists, we are not updating
         return false;
     }
 
-    File versionFile(NEOMOD_DATA_DIR "version.txt");
+    File versionFile(Mc::Paths::data() + "/version.txt");
     std::string linebuf{};
     double version = -1.;
     u64 buildstamp = 0;
@@ -276,11 +277,12 @@ bool is_updating_from_old_version() {
     makeBackup &= shouldSave;
     if(makeBackup) {
         // back up synchronously
-        const std::string backup_name = fmt::format(NEOMOD_CFG_PATH "/osu.cfg.{:.2f}{:s}.bak", version,
+        const std::string cfg_path = Mc::Paths::cfg() + "/osu.cfg";
+        const std::string backup_name = fmt::format("{}.{:.2f}{:s}.bak", cfg_path, version,
                                                     gotLegitBuildstamp ? fmt::format("-{:d}", buildstamp) : "");
-        debugLog("Backing up config " NEOMOD_CFG_PATH "/osu.cfg -> {}", backup_name);
-        if(!File::copy(NEOMOD_CFG_PATH "/osu.cfg"sv, backup_name)) {
-            debugLog("WARNING: failed to back up " NEOMOD_CFG_PATH "/osu.cfg -> {:s}!", backup_name);
+        debugLog("Backing up config {} -> {}", cfg_path, backup_name);
+        if(!File::copy(cfg_path, backup_name)) {
+            debugLog("WARNING: failed to back up {} -> {:s}!", cfg_path, backup_name);
         }
     }
     if(shouldSave) {
@@ -1151,6 +1153,12 @@ void MainMenu::tick() {
                 this->updateButtonAnim.set(1.0f, 0.5f, anim::QuadInOut);
             }
             break;
+        case STATUS_MANUAL_UPDATE:
+            this->updateAvailableButton->setText(_("A new version is available! Click to open the download page."));
+            this->updateAvailableButton->setColor(rgb(0, 130, 200));
+            this->updateAvailableButton->setTextColor(0xffffffff);
+            this->updateAvailableButton->setVisible(true);
+            break;
         case STATUS_ERROR:
             this->updateAvailableButton->setText(_("Update Error! Click to retry ..."));
             this->updateAvailableButton->setColor(rgb(220, 0, 0));
@@ -1206,7 +1214,7 @@ void MainMenu::tick() {
             this->serverIconDL.reset();
         } else if(this->serverIconDL.completed()) {
             const std::string icon_path =
-                fmt::format("{}/avatars/{}/server_icon", env->getCacheDir(), BanchoState::endpoint);
+                fmt::format("{}/avatars/{}/server_icon", Mc::Paths::cache(), BanchoState::endpoint);
             auto data = this->serverIconDL.take_data();
             this->serverIconDL.reset();
             if(!data.empty()) {
@@ -1597,11 +1605,11 @@ void MainMenu::setMenuElementsVisible(bool visible, bool animate) {
 
 void MainMenu::writeVersionFile() {
     // remember, don't show the notification arrow until the version changes again
-    io->write(NEOMOD_DATA_DIR "version.txt",
-              fmt::format("{}\n{}", cv::version.getString(), cv::build_timestamp.getString()),
-              [](bool success) -> void {
+    const std::string version_path = Mc::Paths::data() + "/version.txt";
+    io->write(version_path, fmt::format("{}\n{}", cv::version.getString(), cv::build_timestamp.getString()),
+              [version_path](bool success) -> void {
                   if(!success) {
-                      debugLog("Warning: failed to write new version to {}", NEOMOD_DATA_DIR "version.txt");
+                      debugLog("Warning: failed to write new version to {}", version_path);
                   }
               });
 }
@@ -1730,6 +1738,8 @@ void MainMenu::onUpdatePressed() {
 
     if(status == STATUS_DOWNLOAD_COMPLETE)
         updateHandler->installUpdate();
+    else if(status == STATUS_MANUAL_UPDATE)
+        env->openURLInDefaultBrowser("https://" NEOMOD_DOMAIN);
     else if(status == STATUS_ERROR)
         updateHandler->checkForUpdates(true);
 }
@@ -1825,10 +1835,10 @@ void MainMenu::submitSongsFolderEnum() {
                     entries.push_back(fmt::format("{}/{}/", trimmed, mapset));
                 }
             }
-            auto neomod_mapsets = Environment::getFoldersInFolder(NEOMOD_MAPS_PATH "/");
+            auto neomod_mapsets = Environment::getFoldersInFolder(Mc::Paths::maps() + "/");
             for(const auto &mapset : neomod_mapsets) {
                 if(tok.stop_requested()) return {};
-                entries.push_back(fmt::format(NEOMOD_MAPS_PATH "/{}/", mapset));
+                entries.push_back(fmt::format("{}/{}/", Mc::Paths::maps(), mapset));
             }
             return entries;
         },

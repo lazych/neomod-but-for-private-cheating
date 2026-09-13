@@ -6,6 +6,7 @@
 #include "SyncMutex.h"
 #include "Thread.h"
 #include "Environment.h"
+#include "Paths.h"
 #include "build_timestamp.h"
 
 // for SDL_CleanupTLS
@@ -56,12 +57,8 @@
 // same as release build stdout logging, don't clutter engine logs with source info and stuff
 #define ENGINE_CONSOLE_LOG_PATTERN "[%!] %v"
 
-// e.g. ./logs/
-#define LOGFILE_LOCATION MCENGINE_DATA_DIR "logs/"
-// e.g. ./logs/neomod-linux-x64-dev-40.03.log
-#define _LOGFILE_BASENAME LOGFILE_LOCATION PACKAGE_NAME "-" OS_NAME "-" RELEASE_IDENTIFIER "-" PACKAGE_VERSION_UNCACHED
-#define LOGFILE_NAME _LOGFILE_BASENAME ".log"
-#define LOGFILE_NAME_NETWORK _LOGFILE_BASENAME "-network.log"
+// e.g. neomod-linux-x64-dev-40.03 (the files live in Mc::Paths::logs())
+#define LOGFILE_BASENAME PACKAGE_NAME "-" OS_NAME "-" RELEASE_IDENTIFIER "-" PACKAGE_VERSION_UNCACHED
 
 namespace Logger {
 namespace {  // static
@@ -476,19 +473,20 @@ void init(bool create_console) noexcept {
 
     // if Environment::createDirectory failed, it means we definitely won't be able to write to anything in there
     // (returns true if it already exists)
-    const bool log_to_file{Environment::createDirectory(LOGFILE_LOCATION)};
+    const bool log_to_file{Environment::createDirectory(Mc::Paths::logs())};
 
     // add file sinks if directory is writable
     if(log_to_file) {
         // similar to the ConsoleSink, the logger source determines the output pattern
-        auto file_sink{std::make_shared<DualPatternFileSink>(LOGFILE_NAME, true /* overwrite */)};
+        auto file_sink{std::make_shared<DualPatternFileSink>(Mc::Paths::logs() + "/" LOGFILE_BASENAME ".log",
+                                                             true /* overwrite */)};
 
         main_sinks.push_back(file_sink);
         raw_sinks.push_back(file_sink);
 
         // network channel: file-only, single plain format
-        auto network_file_sink{
-            std::make_shared<spdlog::sinks::basic_file_sink<custom_spdmtx>>(LOGFILE_NAME_NETWORK, true)};
+        auto network_file_sink{std::make_shared<spdlog::sinks::basic_file_sink<custom_spdmtx>>(
+            Mc::Paths::logs() + "/" LOGFILE_BASENAME "-network.log", true)};
         network_file_sink->set_pattern("[%T] %v");  // just timestamp and message
 
         s_network_logger = std::make_shared<spdlog::async_logger>(

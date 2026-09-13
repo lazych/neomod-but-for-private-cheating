@@ -8,6 +8,7 @@
 #include "Engine.h"
 #include "File.h"
 #include "Logging.h"
+#include "Paths.h"
 #include "SyncMutex.h"
 
 #include <algorithm>
@@ -136,7 +137,7 @@ void execConfigFile(std::string_view filename_view) {
 
     const bool is_absolute = filename.contains('/');
     if(!is_absolute) {  // allow absolute paths
-        filename = fmt::format(MCENGINE_CFG_PATH "/{}", filename_view);
+        filename = fmt::format("{}/{}", Mc::Paths::cfg(), filename_view);
     }
 
     // handle extension

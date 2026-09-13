@@ -14,6 +14,7 @@
 #include "Database.h"
 #include "Engine.h"
 #include "Environment.h"
+#include "Paths.h"
 #include "File.h"
 #include "HitObjects.h"
 #include "HUD.h"
@@ -3132,9 +3133,9 @@ void OptionsOverlayImpl::onDPIScalingChange(CBaseUICheckbox *checkbox) {
 void OptionsOverlayImpl::openCurrentSkinFolder() {
     auto current_skin = cv::skin.getString();
     if(strcasecmp(current_skin.c_str(), "default") == 0) {
-        env->openFileBrowser(MCENGINE_IMAGES_PATH "/default");
+        env->openFileBrowser(Mc::Paths::materials() + "/default");
     } else {
-        std::string neomodSkinFolder = fmt::format(NEOMOD_SKINS_PATH "/{}", current_skin);
+        std::string neomodSkinFolder = fmt::format("{}/{}", Mc::Paths::skins(), current_skin);
         if(env->directoryExists(neomodSkinFolder)) {
             env->openFileBrowser(neomodSkinFolder);
         } else {
@@ -3167,8 +3168,8 @@ void OptionsOverlayImpl::onSkinSelectOpened() {
     this->skinFolderEnumHandle = Async::submit(
         [skinFolder] {
             std::vector<std::string> skinFolders;
-            for(const auto &dir :
-                {Environment::getFoldersInFolder(NEOMOD_SKINS_PATH "/"), Environment::getFoldersInFolder(skinFolder)}) {
+            for(const auto &dir : {Environment::getFoldersInFolder(Mc::Paths::skins() + "/"),
+                                   Environment::getFoldersInFolder(skinFolder)}) {
                 for(const auto &skin : dir) {
                     skinFolders.push_back(skin);
                 }
@@ -3272,7 +3273,7 @@ void OptionsOverlayImpl::onResolutionSelect() {
     // get custom resolutions
     std::vector<ivec2> customResolutions;
     {
-        File customres(MCENGINE_CFG_PATH "/customres.cfg");
+        File customres(Mc::Paths::cfg() + "/customres.cfg");
         for(auto line = customres.readLine(); !line.empty() || customres.canRead(); line = customres.readLine()) {
             if(SString::is_comment(line, "#") || SString::is_comment(line, "//")) continue;  // ignore comments
             if(auto parsed = Parsing::parse_resolution(line); parsed.has_value()) {
@@ -4399,7 +4400,7 @@ void OptionsOverlayImpl::save() {
 
     debugLog("Osu: Saving user config file ...");
 
-    static constexpr const std::string_view cfg_name = NEOMOD_CFG_PATH "/osu.cfg"sv;
+    static const std::string cfg_name = Mc::Paths::cfg() + "/osu.cfg";
     static AsyncIOHandler::WriteCallback wr_callback = [](bool success) -> void {
         if(!success) {
             if(osu && osu->UIReady()) {

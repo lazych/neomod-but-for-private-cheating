@@ -19,6 +19,7 @@
 #include "TextureAtlas.h"
 #include "Logging.h"
 #include "Environment.h"
+#include "Paths.h"
 #include "Image.h"
 #include "Hashing.h"
 #include "Graphics.h"
@@ -1745,7 +1746,7 @@ bool McFont::initSharedResources() {
     // check all bundled fonts first
     std::vector<std::string> bundledFallbacks;
     {
-        auto allFonts = Environment::getFilesInFolder(MCENGINE_FONTS_PATH "/");
+        auto allFonts = Environment::getFilesInFolder(Mc::Paths::fonts() + "/");
         // sort to load woff2 before ttf/otf
         std::ranges::sort(allFonts, [](const std::string &font1, const std::string &font2) {
             std::string ext1 = Environment::getFileExtensionFromFilePath(font1);
@@ -1764,7 +1765,7 @@ bool McFont::initSharedResources() {
             std::string pathNoExt = path.substr(0, path.length() - (ext.length() + 1));
             const auto [_, inserted] = fontsNoExt.insert(pathNoExt);
             if(inserted) {
-                bundledFallbacks.push_back(MCENGINE_FONTS_PATH "/"s + path);
+                bundledFallbacks.push_back(Mc::Paths::fonts() + "/" + path);
             }
         }
     }

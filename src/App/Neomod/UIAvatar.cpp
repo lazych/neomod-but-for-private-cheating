@@ -5,6 +5,7 @@
 #include "Bancho.h"
 #include "Engine.h"
 #include "Environment.h"
+#include "Paths.h"
 #include "Osu.h"
 #include "UI.h"
 #include "Graphics.h"
@@ -15,7 +16,7 @@ UIAvatar::UIAvatar(CBaseUIElement *parent, i32 player_id, float xPos, float yPos
     : CBaseUIButton(xPos, yPos, xSize, ySize, "avatar", ""),
       parent(parent),
       thumb_id(new ThumbIdentifier{
-          .save_path = fmt::format("{}/avatars/{}/{}", env->getCacheDir(), BanchoState::endpoint, player_id),
+          .save_path = fmt::format("{}/avatars/{}/{}", Mc::Paths::cache(), BanchoState::endpoint, player_id),
           .download_url = fmt::format("a.{}/{:d}", BanchoState::endpoint, player_id),
           .id = player_id}) {
     this->setClickCallback(SA::MakeDelegate<&UIAvatar::onAvatarClicked>(this));

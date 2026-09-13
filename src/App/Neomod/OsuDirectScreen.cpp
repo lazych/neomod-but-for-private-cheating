@@ -16,6 +16,7 @@
 #include "Downloader.h"
 #include "Engine.h"
 #include "Environment.h"
+#include "Paths.h"
 #include "Font.h"
 #include "Graphics.h"
 #include "i18n.h"
@@ -99,7 +100,7 @@ OnlineMapListing::OnlineMapListing(Downloader::BeatmapSetMetadata meta)
     : font(engine->getDefaultFont()),
       meta(std::move(meta)),
       thumb_id(
-          {.save_path = fmt::format("{}/thumbs/{}/{}", env->getCacheDir(), BanchoState::endpoint, this->meta.set_id),
+          {.save_path = fmt::format("{}/thumbs/{}/{}", Mc::Paths::cache(), BanchoState::endpoint, this->meta.set_id),
            .download_url =
                fmt::format("b.{}/thumb/{:d}.jpg", BanchoState::endpoint,
                            this->meta.set_id),  // Also valid: "b.{}/thumb/{:d}l.jpg" ("l" stands for "large")

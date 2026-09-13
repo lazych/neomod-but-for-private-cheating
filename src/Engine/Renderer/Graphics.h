@@ -213,9 +213,8 @@ class Graphics {
 
     // can be called any time
     void takeScreenshot(ScreenshotParams params);
-    inline void takeScreenshot(std::string_view savePath) {
-        return takeScreenshot(ScreenshotParams{std::string{savePath}, {}, false});
-    }
+    // a relative savePath is taken relative to the data directory
+    void takeScreenshot(std::string_view savePath);
 
     // renderer info
     [[nodiscard]] virtual const char *getName() const = 0;

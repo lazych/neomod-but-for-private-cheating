@@ -15,6 +15,7 @@
 #include "OptionsOverlay.h"
 #include "Logging.h"
 #include "Environment.h"
+#include "Paths.h"
 #include "MakeDelegateWrapper.h"
 
 #ifndef _WIN32
@@ -111,9 +112,18 @@ void UpdateHandler::onVersionCheckComplete(std::string_view response, bool succe
         return;
     }
 
+    if constexpr(Env::cfg(OS::MAC)) {
+        // the app bundle is sealed by its code signature, so the in-place file replacement in installUpdate()
+        // can't work there (replacing the whole bundle is TODO); the main menu button opens the download page instead
+        debugLog("UpdateHandler: v{:.2f} ({:d}) is available, get it from https://" NEOMOD_DOMAIN, latest_version,
+                 latest_build_tms);
+        this->status = STATUS_MANUAL_UPDATE;
+        return;
+    }
+
     // XXX: Blocking file read
-    if(!online_update_hash.empty() && Environment::fileExists(NEOMOD_DATA_DIR "update.zip")) {
-        const auto file_hash = crypto::hash::sha256_file(NEOMOD_DATA_DIR "update.zip");
+    if(!online_update_hash.empty() && Environment::fileExists(Mc::Paths::cache() + "/update.zip")) {
+        const auto file_hash = crypto::hash::sha256_file(Mc::Paths::cache() + "/update.zip");
         if(file_hash && crypto::conv::encodehex(*file_hash) == online_update_hash) {
             debugLog("UpdateHandler: Update already downloaded (hash = {})", online_update_hash);
             this->status = STATUS_DOWNLOAD_COMPLETE;
@@ -149,7 +159,7 @@ void UpdateHandler::onVersionCheckComplete(std::string_view response, bool succe
                                      });
 }
 
-void UpdateHandler::onDownloadComplete(std::span<const u8> data, bool success, std::string hash) {
+void UpdateHandler::onDownloadComplete(std::span<const u8> data, bool success, std::string_view hash) {
     if(!success || data.size() < 2) {
         debugLog("UpdateHandler ERROR: downloaded file is too small or failed ({:d} bytes)!", data.size());
         this->status = STATUS_ERROR;
@@ -165,7 +175,7 @@ void UpdateHandler::onDownloadComplete(std::span<const u8> data, bool success, s
 
     // write to disk
     debugLog("UpdateHandler: Downloaded file has {:d} bytes, writing ...", data.size());
-    std::ofstream file(NEOMOD_DATA_DIR "update.zip", std::ios::out | std::ios::binary);
+    std::ofstream file(Mc::Paths::cache() + "/update.zip", std::ios::out | std::ios::binary);
     if(!file.good()) {
         debugLog("UpdateHandler ERROR: Can't write file!");
         this->status = STATUS_ERROR;
@@ -181,7 +191,7 @@ void UpdateHandler::onDownloadComplete(std::span<const u8> data, bool success, s
 
 void UpdateHandler::installUpdate() {
     debugLog("UpdateHandler: installing");
-    Archive::Reader archive(NEOMOD_DATA_DIR "update.zip");
+    Archive::Reader archive(Mc::Paths::cache() + "/update.zip");
     if(!archive.isValid()) {
         debugLog("UpdateHandler ERROR: couldn't open archive!");
         this->status = STATUS_ERROR;

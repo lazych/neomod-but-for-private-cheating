@@ -18,6 +18,7 @@ class UpdateHandler {
         STATUS_CHECKING_FOR_UPDATE,
         STATUS_DOWNLOADING_UPDATE,
         STATUS_DOWNLOAD_COMPLETE,
+        STATUS_MANUAL_UPDATE,  // newer version available, but this platform can't self-update (see installUpdate)
         STATUS_ERROR,
     };
 
@@ -38,7 +39,7 @@ class UpdateHandler {
    private:
     // async operation chain
     void onVersionCheckComplete(std::string_view response, bool success, bool force_update);
-    void onDownloadComplete(std::span<const u8> data, bool success, std::string hash);
+    void onDownloadComplete(std::span<const u8> data, bool success, std::string_view hash);
 
     // status
     std::atomic<STATUS> status = STATUS::STATUS_IDLE;

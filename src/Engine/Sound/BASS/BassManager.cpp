@@ -8,6 +8,7 @@
 #include "File.h"
 #include "Logging.h"
 #include "Environment.h"
+#include "Paths.h"
 #include "UniString.h"
 
 #include "dynutils.h"
@@ -48,12 +49,8 @@ static T loadFunction(dynutils::lib_obj *lib, const char *funcName) {
     X(bassloud, BASS_Loudness_GetVersion, BASSLOUDVERSION_REAL, BASS_LOUD_FUNCTIONS) \
     _BASS_WIN_LIBRARIES(X)
 
-// setup the library handles and paths to check for them
-#define DECLARE_LIB(name, ...)                              \
-    static dynutils::lib_obj *s_lib##name = nullptr;        \
-    static constexpr std::initializer_list name##_paths = { \
-        MCENGINE_LIB_PATH "/" LNAME(name),                  \
-        LNAME(name)};  // check under lib/ if it's not found in the default search path
+// setup the library handles
+#define DECLARE_LIB(name, ...) static dynutils::lib_obj *s_lib##name = nullptr;
 
 BASS_LIBRARIES(DECLARE_LIB)
 
@@ -67,8 +64,9 @@ ALL_BASS_FUNCTIONS(DEFINE_BASS_FUNCTION)
 #define GENERATE_LIBRARY_LOADER(libname, vfunc, ver, funcgroup)                                                    \
     static bool load_##libname() {                                                                                 \
         failedLoad = #libname;                                                                                     \
-        for(auto &path : libname##_paths) {                                                                        \
-            s_lib##libname = dynutils::load_lib(path);                                                             \
+        /* check under the lib dir first, then the default search path */                                          \
+        for(const auto &path : {Mc::Paths::libs() + "/" LNAME(libname), std::string{LNAME(libname)}}) {            \
+            s_lib##libname = dynutils::load_lib(path.c_str());                                                     \
             if(!s_lib##libname) continue;                                                                          \
             (vfunc) = loadFunction<vfunc##_t>(s_lib##libname, #vfunc);                                             \
             if(!(vfunc)) {                                                                                         \
@@ -114,7 +112,7 @@ HPLUGIN loadPlugin(const std::string &pluginname) {
     // handle bassflac plugin separately
     std::string tryPath{LNAMESTR(pluginname)};
 
-    if(!Environment::fileExists(tryPath)) tryPath = fmt::format(MCENGINE_LIB_PATH "/{}", LNAMESTR(pluginname));
+    if(!Environment::fileExists(tryPath)) tryPath = fmt::format("{}/{}", Mc::Paths::libs(), LNAMESTR(pluginname));
 
     // make it a fully qualified path
     if(Environment::fileExists(tryPath))

@@ -18,6 +18,7 @@
 #include "NetworkHandler.h"
 #include "NotificationOverlay.h"
 #include "Osu.h"
+#include "Paths.h"
 #include "SyncStoptoken.h"
 #include "OsuConVars.h"
 #include "SongBrowser.h"
@@ -298,7 +299,7 @@ bool save_osr(const FinishedScore& score, std::span<const std::string> additiona
     }
 
     const std::string osr_path =
-        fmt::format(NEOMOD_REPLAYS_PATH "/{}/{}-{}.osr", score.server, score.player_id, score.unix_timestamp);
+        fmt::format("{}/{}/{}-{}.osr", Mc::Paths::replays(), score.server, score.player_id, score.unix_timestamp);
     ByteBufferedFile::Writer osr(osr_path);
     if(!osr.good()) {
         debugLog("Cannot save replay to {}: {}", osr_path, osr.error());
@@ -378,25 +379,27 @@ void watch(const FinishedScore& score) {
 
 bool load_from_disk(FinishedScore& score, bool update_db) {
     bool succeeded = false;
-    for(const auto& osr : std::array{
-            // peppy replay
-            (score.peppy_replay_tms > 0 ? fmt::format("{}/Data/r/{}-{}.osr", cv::osu_folder.getString(),
-                                                      score.beatmap_hash, score.peppy_replay_tms)
-                                        : ""s),
-            // neomod 43.09+
-            (score.server.empty() ? fmt::format(NEOMOD_REPLAYS_PATH "/{}-{}.osr", score.player_id, score.unix_timestamp)
-                                  : fmt::format(NEOMOD_REPLAYS_PATH "/{}/{}-{}.osr", score.server, score.player_id,
-                                                score.unix_timestamp))}) {
+    for(const auto& osr :
+        std::array{// peppy replay
+                   (score.peppy_replay_tms > 0 ? fmt::format("{}/Data/r/{}-{}.osr", cv::osu_folder.getString(),
+                                                             score.beatmap_hash, score.peppy_replay_tms)
+                                               : ""s),
+                   // neomod 43.09+
+                   (score.server.empty()
+                        ? fmt::format("{}/{}-{}.osr", Mc::Paths::replays(), score.player_id, score.unix_timestamp)
+                        : fmt::format("{}/{}/{}-{}.osr", Mc::Paths::replays(), score.server, score.player_id,
+                                      score.unix_timestamp))}) {
         if(osr.empty()) continue;
         if((succeeded = load_osr(osr, score))) break;
     }
 
     if(!succeeded) {
         // neomod (legacy)
-        for(const auto& raw : std::array{(fmt::format(NEOMOD_REPLAYS_PATH "/{}.replay.lzma", score.unix_timestamp)),
-                                         (score.server.empty() ? ""s
-                                                               : fmt::format(NEOMOD_REPLAYS_PATH "/{}/{}.replay.lzma",
-                                                                             score.server, score.unix_timestamp))}) {
+        for(const auto& raw :
+            std::array{(fmt::format("{}/{}.replay.lzma", Mc::Paths::replays(), score.unix_timestamp)),
+                       (score.server.empty() ? ""s
+                                             : fmt::format("{}/{}/{}.replay.lzma", Mc::Paths::replays(), score.server,
+                                                           score.unix_timestamp))}) {
             if(raw.empty()) continue;
             if((succeeded = load_raw(raw, score))) break;
         }

@@ -5,6 +5,7 @@
 #include "ConVar.h"
 #include "Engine.h"
 #include "Environment.h"
+#include "Paths.h"
 #include "Image.h"
 #include "Logging.h"
 
@@ -51,6 +52,12 @@ vec2 Graphics::getAnchoredOrigin(AnchorPoint anchor, vec2 size) {
 
 void Graphics::takeScreenshot(ScreenshotParams params) { m_data->pendingScreenshots.push_back(std::move(params)); }
 
+void Graphics::takeScreenshot(std::string_view savePath) {
+    std::string path{savePath};
+    if(!path.empty() && !Environment::isAbsolutePath(path)) path = fmt::format("{}/{}", Mc::Paths::data(), path);
+    takeScreenshot(ScreenshotParams{std::move(path), {}, false});
+}
+
 void Graphics::processPendingScreenshot() {
     if(m_data->pendingScreenshots.empty()) return;
 
@@ -60,10 +67,10 @@ void Graphics::processPendingScreenshot() {
 
         if(savePath.empty() && !callback) {
             static i32 num = 0;
-            Environment::createDirectory(MCENGINE_DATA_DIR "screenshots");
-            while(Environment::fileExists(fmt::format(MCENGINE_DATA_DIR "screenshots/test_screenshot{}.png", num)))
+            Environment::createDirectory(Mc::Paths::screenshots());
+            while(Environment::fileExists(fmt::format("{}/test_screenshot{}.png", Mc::Paths::screenshots(), num)))
                 num++;
-            savePath = fmt::format(MCENGINE_DATA_DIR "screenshots/test_screenshot{}.png", num);
+            savePath = fmt::format("{}/test_screenshot{}.png", Mc::Paths::screenshots(), num);
         }
 
         std::vector<u8> pixels = this->getScreenshot(screenshot.withAlpha);

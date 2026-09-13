@@ -8357,7 +8357,7 @@ __EOF__
 printf '%s\n' "#define MCENGINE_PLATFORM_WASM 1" >>confdefs.h
 
 
-printf '%s\n' "#define NEOMOD_DATA_DIR \"/persist/\"" >>confdefs.h
+printf '%s\n' "#define APP_DATA_DIR \"/persist/\"" >>confdefs.h
 
 
  ;; #(
@@ -8559,8 +8559,8 @@ __EOF__
     NASMOBJ=macho64
 
 
-    # fixup linker runtime paths (mirror linux, but macOS uses @loader_path instead of $ORIGIN)
-    NATIVE_LDFLAGS="-Wl,-rpath,@loader_path/lib -Wl,-rpath,@loader_path"
+    # fixup linker runtime paths (the app bundle keeps its dylibs in Contents/Frameworks)
+    NATIVE_LDFLAGS="-Wl,-rpath,@executable_path/../Frameworks"
 
 
 

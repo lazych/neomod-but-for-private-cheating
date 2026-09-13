@@ -288,6 +288,7 @@ neomod_SOURCES = \
 	src/Platform/Environment.cpp \
 	src/Platform/GPUDriverConfigurator.cpp \
 	src/Platform/LaunchArgs.cpp \
+	src/Platform/Paths.cpp \
 	src/Platform/RuntimePlatform.cpp \
 	src/Platform/main.cpp \
 	src/Platform/main_impl.cpp \

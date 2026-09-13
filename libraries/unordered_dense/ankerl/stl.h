@@ -31,6 +31,7 @@
 
 #include <array>            // for array
 #include <cstdint>          // for uint64_t, uint32_t, std::uint8_t, UINT64_C
+#include <cstdlib>          // for abort
 #include <cstring>          // for size_t, memcpy, memset
 #include <functional>       // for equal_to, hash
 #include <initializer_list> // for initializer_list

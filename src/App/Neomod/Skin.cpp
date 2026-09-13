@@ -8,6 +8,7 @@
 #include "ConVarHandler.h"
 #include "Engine.h"
 #include "Environment.h"
+#include "Paths.h"
 #include "File.h"
 #include "Database.h"
 #include "NotificationOverlay.h"
@@ -32,7 +33,7 @@ bool Skin::unpack(std::string_view filepath) {
     debugLog("Extracting {:s}...", skin_name.c_str());
     skin_name.erase(skin_name.size() - 4);  // remove .osk extension
 
-    auto skin_root = fmt::format(NEOMOD_SKINS_PATH "/{}/", skin_name);
+    auto skin_root = fmt::format("{}/{}/", Mc::Paths::skins(), skin_name);
 
     std::unique_ptr<u8[]> fileBuffer;
     size_t fileSize{0};
@@ -135,7 +136,7 @@ Skin::Skin(std::string name, std::string filepath, std::string fallbackDir)
       // custom
       o_random(cv::skin_random.getBool()),
       o_random_elements(cv::skin_random_elements.getBool()),
-      is_default(this->skin_dir.starts_with(MCENGINE_IMAGES_PATH "/default")) {
+      is_default(this->skin_dir.starts_with(Mc::Paths::materials() + "/default")) {
     // load all files
     this->load();
 }
@@ -206,7 +207,7 @@ bool Skin::isReady() const {
 }
 
 void Skin::load() {
-    const std::string default_dir{MCENGINE_IMAGES_PATH "/default/"};
+    const std::string default_dir{Mc::Paths::materials() + "/default/"};
 
     // random skins
     {
@@ -280,7 +281,7 @@ void Skin::load() {
     cvars().resetSkinCvars();
     if(!this->parseSkinINI(this->skin_ini_path)) {
         parseSkinIni1Status = false;
-        this->skin_ini_path = MCENGINE_IMAGES_PATH "/default/skin.ini";
+        this->skin_ini_path = Mc::Paths::materials() + "/default/skin.ini";
         cvars().resetSkinCvars();
         parseSkinIni2Status = this->parseSkinINI(this->skin_ini_path);
     }
@@ -503,7 +504,7 @@ void Skin::load() {
     // always load default skin menu-back (to show in options menu)
     {
         std::string origdir = this->search_dirs[0];
-        this->search_dirs[0] = MCENGINE_IMAGES_PATH "/default/";
+        this->search_dirs[0] = Mc::Paths::materials() + "/default/";
         this->createSkinImage(this->i_menu_back2_DEFAULTSKIN, "menu-back", vec2(225, 87), 54);
         this->search_dirs[0] = std::move(origdir);
     }

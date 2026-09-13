@@ -6,6 +6,9 @@
 #define __TOP_SRC_CONFIG_H_INCLUDE_GUARD
 
 
+/* Persistent writable data directory for WASM. */
+#undef APP_DATA_DIR
+
 /* Define to 1 if you have the <glm/vec3.hpp> header file. */
 #undef HAVE_GLM_VEC3_HPP
 
@@ -98,9 +101,6 @@
 
 /* Defined if building with support for the testing framework. */
 #undef MCENGINE_TESTS
-
-/* Persistent writable data directory for WASM. */
-#undef NEOMOD_DATA_DIR
 
 /* Define to the address where bug reports for this package should be sent. */
 #undef PACKAGE_BUGREPORT

@@ -27,6 +27,7 @@
 #include "Engine.h"
 #include "Logging.h"
 #include "Environment.h"
+#include "Paths.h"
 #include "Graphics.h"
 
 #include "binary_embed.h"
@@ -42,12 +43,6 @@ struct ResourceManagerImpl final {
     NOCOPY_NOMOVE(ResourceManagerImpl)
    public:
     ResourceManagerImpl() : asyncLoader() /* create async loader instance */ {
-        // create directories we will assume already exist later on
-        Environment::createDirectory(MCENGINE_FONTS_PATH);
-        Environment::createDirectory(MCENGINE_IMAGES_PATH);
-        Environment::createDirectory(MCENGINE_SHADERS_PATH);
-        Environment::createDirectory(MCENGINE_SOUNDS_PATH);
-
         this->bNextLoadAsync.store(false, std::memory_order_release);
 
         // reserve space for typed vectors
@@ -423,7 +418,7 @@ Image *ResourceManager::loadImage(std::string filepath, const std::string &resou
     if(res != nullptr) return res;
 
     // create instance and load it
-    filepath.insert(0, MCENGINE_IMAGES_PATH "/");
+    filepath.insert(0, Mc::Paths::materials() + "/");
     Image *img = g->createImage(filepath, mipmapped, keepInSystemMemory);
     pImpl->setResourceName(img, resourceName);
 
@@ -433,7 +428,7 @@ Image *ResourceManager::loadImage(std::string filepath, const std::string &resou
 }
 
 Image *ResourceManager::loadImageUnnamed(std::string filepath, bool mipmapped, bool keepInSystemMemory) {
-    filepath.insert(0, MCENGINE_IMAGES_PATH "/");
+    filepath.insert(0, Mc::Paths::materials() + "/");
     Image *img = g->createImage(filepath, mipmapped, keepInSystemMemory);
 
     loadResource(img, true);
@@ -483,7 +478,7 @@ McFont *ResourceManager::loadFont(std::string filepath, const std::string &resou
     if(res != nullptr) return res;
 
     // create instance and load it
-    filepath.insert(0, MCENGINE_FONTS_PATH "/");
+    filepath.insert(0, Mc::Paths::fonts() + "/");
     auto *fnt = new McFont(std::move(filepath), fontSize, antialiasing, fontDPI);
     pImpl->setResourceName(fnt, resourceName);
 
@@ -499,7 +494,7 @@ McFont *ResourceManager::loadFont(std::string filepath, const std::string &resou
     if(res != nullptr) return res;
 
     // create instance and load it
-    filepath.insert(0, MCENGINE_FONTS_PATH "/");
+    filepath.insert(0, Mc::Paths::fonts() + "/");
     auto *fnt = new McFont(std::move(filepath), characters, fontSize, antialiasing, fontDPI);
     pImpl->setResourceName(fnt, resourceName);
 
@@ -514,7 +509,7 @@ Sound *ResourceManager::loadSound(std::string filepath, const std::string &resou
     if(res != nullptr) return res;
 
     // create instance and load it
-    filepath.insert(0, MCENGINE_SOUNDS_PATH "/");
+    filepath.insert(0, Mc::Paths::assets() + "/sounds/");
     auto *snd{soundEngine->createSound(filepath, stream, overlayable, loop)};
     pImpl->setResourceName(snd, resourceName);
 
@@ -543,8 +538,8 @@ Shader *ResourceManager::loadShader(std::string vertexShaderFilePath, std::strin
     if(res != nullptr) return res;
 
     // create instance and load it
-    vertexShaderFilePath.insert(0, MCENGINE_SHADERS_PATH "/");
-    fragmentShaderFilePath.insert(0, MCENGINE_SHADERS_PATH "/");
+    vertexShaderFilePath.insert(0, Mc::Paths::assets() + "/shaders/");
+    fragmentShaderFilePath.insert(0, Mc::Paths::assets() + "/shaders/");
     Shader *shader = g->createShaderFromFile(vertexShaderFilePath, fragmentShaderFilePath);
     pImpl->setResourceName(shader, resourceName);
 
@@ -554,8 +549,8 @@ Shader *ResourceManager::loadShader(std::string vertexShaderFilePath, std::strin
 }
 
 Shader *ResourceManager::loadShader(std::string vertexShaderFilePath, std::string fragmentShaderFilePath) {
-    vertexShaderFilePath.insert(0, MCENGINE_SHADERS_PATH "/");
-    fragmentShaderFilePath.insert(0, MCENGINE_SHADERS_PATH "/");
+    vertexShaderFilePath.insert(0, Mc::Paths::assets() + "/shaders/");
+    fragmentShaderFilePath.insert(0, Mc::Paths::assets() + "/shaders/");
     Shader *shader = g->createShaderFromFile(vertexShaderFilePath, fragmentShaderFilePath);
 
     loadResource(shader, true);

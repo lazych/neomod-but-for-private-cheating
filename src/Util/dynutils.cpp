@@ -1,7 +1,7 @@
 // Copyright (c) 2025, WH, All rights reserved.
 #include "dynutils.h"
 #include "Environment.h"
-#include "EngineConfig.h"
+#include "Paths.h"
 
 #include <SDL3/SDL_loadso.h>
 #include <cassert>
@@ -81,7 +81,7 @@ lib_obj *load_lib(const char *c_lib_name, const char *c_search_dir) {
     if(!ret) {
         if(!lib_name.empty() && !lib_name.contains('/')) {
             // try to fall back to relative local paths first before giving up entirely
-            for(const auto &path : std::array{MCENGINE_LIB_PATH "/", MCENGINE_DATA_DIR}) {
+            for(const auto &path : {Mc::Paths::libs() + "/", Mc::Paths::assets() + "/"}) {
                 std::string temp_relative = fmt::format("{}{}", path, lib_name);
                 if((ret = reinterpret_cast<lib_obj *>(SDL_LoadObject(temp_relative.c_str())))) {
                     // found
@@ -145,7 +145,7 @@ lib_obj *load_lib_system(const char *c_lib_name) {
 }
 
 lib_obj *load_lib(decltype(nullptr)) {
-    auto *ret = reinterpret_cast<lib_obj*>(GetModuleHandle(nullptr));
+    auto *ret = reinterpret_cast<lib_obj *>(GetModuleHandle(nullptr));
     assert(ret);
     return ret;
 }
@@ -158,7 +158,7 @@ lib_obj *load_lib(decltype(nullptr)) {
 lib_obj *load_lib_system(const char *c_lib_name) { return load_lib(c_lib_name); }
 
 lib_obj *load_lib(decltype(nullptr)) {
-    auto *ret = reinterpret_cast<lib_obj*>(dlopen(nullptr, RTLD_NOW | RTLD_GLOBAL));
+    auto *ret = reinterpret_cast<lib_obj *>(dlopen(nullptr, RTLD_NOW | RTLD_GLOBAL));
     assert(ret);
     return ret;
 }

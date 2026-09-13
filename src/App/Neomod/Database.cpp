@@ -30,6 +30,7 @@
 #include "crypto.h"
 #include "score.h"
 #include "Environment.h"
+#include "Paths.h"
 #include "MakeDelegateWrapper.h"
 #include "Hashing.h"
 #include "i18n.h"
@@ -123,13 +124,13 @@ std::string Database::getDBPath(DatabaseType db_type) {
             return {""};
         }
         case NEOMOD_SCORES:
-            return NEOMOD_DB_DIR PACKAGE_NAME "_scores.db";
+            return Mc::Paths::db() + "/" PACKAGE_NAME "_scores.db";
         case MCNEOMOD_SCORES:
-            return NEOMOD_DB_DIR "scores.db";
+            return Mc::Paths::db() + "/scores.db";
         case MCNEOMOD_COLLECTIONS:
-            return NEOMOD_DB_DIR "collections.db";
+            return Mc::Paths::db() + "/collections.db";
         case NEOMOD_MAPS:
-            return NEOMOD_DB_DIR PACKAGE_NAME "_maps.db";
+            return Mc::Paths::db() + "/" PACKAGE_NAME "_maps.db";
         case STABLE_SCORES:
         case STABLE_COLLECTIONS:
         case STABLE_MAPS: {
@@ -349,7 +350,7 @@ void Database::destroyLoader() {
     // beatmap_difficulties wipe in startLoader makes them dangle.
     VolNormalization::flush_priority();
 
-    directoryWatcher->stop_watching(NEOMOD_MAPS_PATH "/");
+    directoryWatcher->stop_watching(Mc::Paths::maps() + "/");
     this->load_interrupted.store(true, std::memory_order_release);  // for subroutines (loadMaps, etc.)
     this->db_load_handle.cancel();
     if(this->db_load_handle.valid()) this->db_load_handle.wait();
@@ -362,7 +363,7 @@ bool Database::migrate_neosu_to_neomod() {
 
     {
         const std::string neomod_scores_path = getDBPath(DatabaseType::NEOMOD_SCORES);
-        const std::string_view old_neosu_scores_path = NEOMOD_DB_DIR "neosu_scores.db";
+        const std::string old_neosu_scores_path = Mc::Paths::db() + "/neosu_scores.db";
 
         // migrate scores
         if(!Environment::fileExists(neomod_scores_path) && Environment::fileExists(old_neosu_scores_path)) {
@@ -375,7 +376,7 @@ bool Database::migrate_neosu_to_neomod() {
     }
     {
         const std::string neomod_maps_path = getDBPath(DatabaseType::NEOMOD_MAPS);
-        const std::string_view old_neosu_maps_path = NEOMOD_DB_DIR "neosu_maps.db";
+        const std::string old_neosu_maps_path = Mc::Paths::db() + "/neosu_maps.db";
 
         // migrate maps
         if(!Environment::fileExists(neomod_maps_path) && Environment::fileExists(old_neosu_maps_path)) {
@@ -458,13 +459,13 @@ void Database::importLooseOsz(const Sync::stop_token &tok) {
     // like any other unknown folder, so these maps are part of the initial listing.
 
     std::vector<std::string> oszs;
-    for(auto &file : env->getFilesInFolder(NEOMOD_MAPS_PATH "/")) {
+    for(auto &file : env->getFilesInFolder(Mc::Paths::maps() + "/")) {
         if(file.size() > 4 && SString::strcase_equal(std::string_view{file.data() + (file.size() - 4), 4}, ".osz"))
             oszs.push_back(std::move(file));
     }
     if(oszs.empty()) return;
 
-    debugLog("Importing {:d} loose .osz file(s) from " NEOMOD_MAPS_PATH "/", oszs.size());
+    debugLog("Importing {:d} loose .osz file(s) from {}/", oszs.size(), Mc::Paths::maps());
 
     // the .osz aren't in loadMaps' byte budget, so the percentage stays pinned near 0.99 throughout
     // this loop; the import count surfaced via getStageDone()/getStageTotal() is the user's actual
@@ -481,7 +482,7 @@ void Database::importLooseOsz(const Sync::stop_token &tok) {
 
     auto submit_extract = [](const std::string &osz_name) {
         return Async::submit(
-            [path = NEOMOD_MAPS_PATH "/" + osz_name]() -> std::string {
+            [path = Mc::Paths::maps() + "/" + osz_name]() -> std::string {
                 return BeatmapInstaller::read_and_extract_osz(path);
             },
             Lane::Background);
@@ -495,7 +496,7 @@ void Database::importLooseOsz(const Sync::stop_token &tok) {
 
         // window[i % window_size] holds oszs[i]'s extraction (primed above, then refilled in order)
         const std::string folder = window[i % window_size].get();
-        const std::string path = NEOMOD_MAPS_PATH "/" + oszs[i];
+        const std::string path = Mc::Paths::maps() + "/" + oszs[i];
         if(!folder.empty()) {
             env->deleteFile(path);
         } else {
@@ -869,7 +870,7 @@ BeatmapSet *Database::getBeatmapSet(i32 set_id) const {
 
 namespace {
 std::string rel_folder_of(std::string_view folder_path) {
-    // maps/ sets live directly under NEOMOD_MAPS_PATH, so the folder name is the last path component
+    // maps/ sets live directly under the maps dir, so the folder name is the last path component
     while(folder_path.ends_with('/') || folder_path.ends_with('\\')) folder_path.remove_suffix(1);
     const auto sep = folder_path.find_last_of("/\\");
     return std::string{sep == std::string_view::npos ? folder_path : folder_path.substr(sep + 1)};
@@ -3067,7 +3068,7 @@ u32 Database::reconcileRoot(MapRoot root, const Sync::stop_token &tok, bool per_
 }
 
 std::string Database::rootPath(MapRoot root) const {
-    return root == MapRoot::Neomod ? std::string{NEOMOD_MAPS_PATH "/"} : this->peppy_root;
+    return root == MapRoot::Neomod ? Mc::Paths::maps() + "/" : this->peppy_root;
 }
 
 void Database::update_overrides(const BeatmapDifficulty *diff) {

@@ -14,6 +14,7 @@
 #include "Chat.h"
 #include "OsuConVars.h"
 #include "Environment.h"
+#include "Paths.h"
 #include "ConVarHandler.h"
 #include "Engine.h"
 #include "Lobby.h"
@@ -136,13 +137,13 @@ void BanchoState::update_online_status(OnlineStatus new_status) {
     if(old_status != new_status && (new_status == OnlineStatus::LOGGED_OUT || new_status == OnlineStatus::LOGGED_IN)) {
         // make sure we create these directories once, now that we know the endpoint is valid
         if(new_status == OnlineStatus::LOGGED_IN) {
-            std::string avatar_dir = fmt::format("{}/avatars/{}", env->getCacheDir(), BanchoState::endpoint);
+            std::string avatar_dir = fmt::format("{}/avatars/{}", Mc::Paths::cache(), BanchoState::endpoint);
             Environment::createDirectory(avatar_dir);
 
-            std::string replays_dir = fmt::format(NEOMOD_REPLAYS_PATH "/{}", BanchoState::endpoint);
+            std::string replays_dir = fmt::format("{}/{}", Mc::Paths::replays(), BanchoState::endpoint);
             Environment::createDirectory(replays_dir);
 
-            std::string thumbs_dir = fmt::format("{}/thumbs/{}", env->getCacheDir(), BanchoState::endpoint);
+            std::string thumbs_dir = fmt::format("{}/thumbs/{}", Mc::Paths::cache(), BanchoState::endpoint);
             Environment::createDirectory(thumbs_dir);
         }
 
@@ -1123,7 +1124,8 @@ std::string get_disk_uuid_platform() {
     }
 
 #elif defined(MCENGINE_PLATFORM_WASM)
-    FILE *f = File::fopen_c(NEOMOD_DATA_DIR "client_id", "r");
+    const std::string client_id_path = Mc::Paths::data() + "/client_id";
+    FILE *f = File::fopen_c(client_id_path.c_str(), "r");
     if(f) {
         std::array<char, 64> buf{};
         fgets(buf.data(), buf.size(), f);
@@ -1132,7 +1134,7 @@ std::string get_disk_uuid_platform() {
     }
 
     const char *uuid = emscripten_run_script_string("crypto.randomUUID()");
-    f = File::fopen_c(NEOMOD_DATA_DIR "client_id", "w");
+    f = File::fopen_c(client_id_path.c_str(), "w");
     if(f) {
         fputs(uuid, f);
         fclose(f);

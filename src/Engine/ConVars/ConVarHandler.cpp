@@ -5,6 +5,7 @@
 
 #include "AsyncIOHandler.h"
 #include "Logging.h"
+#include "Paths.h"
 #include "Engine.h"
 #include "SString.h"
 #include "Graphics.h"
@@ -328,7 +329,7 @@ void ConVarHandler::ConVarBuiltins::dumpcommands(void) {
     size_t pos = html_template.find(marker);
     html_template.replace(pos, marker.length(), html);
 
-    io->write(MCENGINE_DATA_DIR "variables.htm", std::move(html_template), [](bool success) -> void {
+    io->write(Mc::Paths::data() + "/variables.htm", std::move(html_template), [](bool success) -> void {
         if(success) {
             logRaw("ConVars dumped to variables.htm");
         } else {

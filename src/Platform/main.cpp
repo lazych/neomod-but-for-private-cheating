@@ -1,6 +1,5 @@
 // Copyright (c) 2025, WH, All rights reserved.
 #include "BaseEnvironment.h"
-#include "EngineConfig.h"
 #include "Logging.h"
 #include "build_timestamp.h"
 
@@ -25,8 +24,8 @@
 #include "Engine.h"
 #include "DiffCalcTool.h"
 #include "File.h"
-#include "UniString.h"
 #include "LaunchArgs.h"
+#include "Paths.h"
 
 #include "environment_private.h"
 #include "AppDescriptor.h"
@@ -37,7 +36,6 @@
 #include <processenv.h>   // for GetCommandLine
 #endif
 
-#include <filesystem>
 #include <locale>
 #include <clocale>
 
@@ -52,37 +50,6 @@ EM_JS(void, js_fatal_error, (const char *str), { alert(UTF8ToString(str)); });
 #ifdef WITH_LIVEPP
 #include "LPP_API_x64_CPP.h"
 #endif
-
-namespace {
-void setcwdexe(const std::string &exePathStr) noexcept {
-    // Fix path in case user is running it from the wrong folder.
-    // We only do this if MCENGINE_DATA_DIR is set to its default value, since if it's changed,
-    // the packager clearly wants the executable in a different location.
-    if constexpr(Env::cfg(OS::WASM) || (!(MCENGINE_DATA_DIR[0] == '.' && MCENGINE_DATA_DIR[1] == '/'))) {
-        return;
-    }
-    namespace fs = std::filesystem;
-
-    bool failed = true;
-    std::error_code ec;
-
-    fs::path exe_path;
-    if constexpr(Env::cfg(OS::WINDOWS)) {
-        exe_path = UniString::to_wide(exePathStr);
-    } else {
-        exe_path = exePathStr;
-    }
-
-    if(!exe_path.empty() && exe_path.has_parent_path()) {
-        fs::current_path(exe_path.parent_path(), ec);
-        failed = !!ec;
-    }
-
-    if(failed) {
-        debugLog("WARNING: failed to set working directory to parent of {}", exePathStr.c_str());
-    }
-}
-}  // namespace
 
 //*********************************//
 //	SDL CALLBACKS/MAINLOOP BEGINS  //
@@ -249,9 +216,8 @@ MAIN_FUNC /* int argc, char *argv[] */
 
     // this sets and caches the path in getPathToSelf, so this must be called here
     const auto &selfpath = Environment::getPathToSelf(argv[0]);
-    // set the current working directory to the executable directory, so that relative paths
-    // work as expected
-    setcwdexe(selfpath);
+    // switch the working directory to the executable's folder and resolve the asset/data directory layout
+    Mc::Paths::detail::init(selfpath);
 
     // improve floating point perf in case this isn't already enabled by the compiler
     // -nofpu to disable (debug)

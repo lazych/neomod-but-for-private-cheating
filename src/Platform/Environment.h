@@ -145,16 +145,12 @@ class Environment {
     // i.e. unsetenv()
     static bool unsetEnvVariable(std::string_view varToUnset) noexcept;
 
-    static const std::string &getExeFolder();
-
     void openURLInDefaultBrowser(std::string_view url, bool preventFocusSteal = false) noexcept;
 
     // user
     [[nodiscard]] std::string_view getUsername() const noexcept;
     [[nodiscard]] const std::string &getDefaultLocale() const noexcept;
     [[nodiscard]] const std::string &getUserDataPath() const noexcept;
-    [[nodiscard]] const std::string &getLocalDataPath() const noexcept;
-    [[nodiscard]] const std::string &getCacheDir() const noexcept;
 
     // file IO
     [[nodiscard]] static bool fileExists(std::string &filename) noexcept;  // passthroughs to McFile
@@ -333,9 +329,7 @@ class Environment {
 
     // cache
     mutable std::string m_sUsername;
-    mutable std::string m_sProgDataPath;
     mutable std::string m_sAppDataPath;
-    mutable std::string m_sCacheDir;
 
     // logging
     inline bool envDebug(bool enable) {

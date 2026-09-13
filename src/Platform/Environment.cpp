@@ -1,6 +1,7 @@
 // Copyright (c) 2018, PG & 2025, WH, All rights reserved.
 
 #include "Environment.h"
+#include "Paths.h"
 
 #include "AsyncPool.h"
 #include "Engine.h"
@@ -131,7 +132,6 @@ Environment::Environment(const Mc::AppDescriptor &appDesc)
         !Env::cfg(OS::WASM);  // will set to false if our minimize request didn't actually result in minimizing
 
     m_sUsername = {};
-    m_sProgDataPath = {};  // local data for McEngine files
     m_sAppDataPath = {};
 
     m_bIsCursorInsideWindow = true;
@@ -310,19 +310,6 @@ void Environment::restart() {
     shutdown();
 }
 
-const std::string &Environment::getExeFolder() {
-    static std::string pathStr{};
-    if(!pathStr.empty()) return pathStr;
-    // sdl caches this internally, but we'll cache a std::string representation of it
-    const char *path = SDL_GetBasePath();
-    if(path) {
-        pathStr = path;
-    } else {
-        pathStr = "./";
-    }
-    return pathStr;
-}
-
 void Environment::openURLInDefaultBrowser(std::string_view url, bool /*preventFocusSteal*/ /*(TODO)*/) noexcept {
     // TODO: focus-stealing prevention
     if(!SDL_OpenURL(std::string{url}.c_str())) {
@@ -405,7 +392,8 @@ const std::string &Environment::getDefaultLocale() const noexcept {
 const std::string &Environment::getUserDataPath() const noexcept {
     if(!m_sAppDataPath.empty()) return m_sAppDataPath;
 
-    m_sAppDataPath = MCENGINE_DATA_DIR;  // set it to non-empty to avoid endlessly failing if SDL_GetPrefPath fails once
+    m_sAppDataPath =
+        Mc::Paths::data() + "/";  // set it to non-empty to avoid endlessly failing if SDL_GetPrefPath fails once
 
     if(std::unique_ptr<char[], decltype(&SDL_free)> path{SDL_GetPrefPath("", ""), &SDL_free}) {
         m_sAppDataPath = path.get();
@@ -415,45 +403,6 @@ const std::string &Environment::getUserDataPath() const noexcept {
     }
 
     return m_sAppDataPath;
-}
-
-// i.e. ~/.local/share/PACKAGE_NAME
-const std::string &Environment::getLocalDataPath() const noexcept {
-    if(!m_sProgDataPath.empty()) return m_sProgDataPath;
-
-    if(std::unique_ptr<char[], decltype(&SDL_free)> path{SDL_GetPrefPath("McEngine", PACKAGE_NAME), &SDL_free}) {
-        m_sProgDataPath = path.get();
-    }
-
-    if(m_sProgDataPath.empty())  // fallback to exe dir
-        m_sProgDataPath = getExeFolder();
-
-    return m_sProgDataPath;
-}
-
-const std::string &Environment::getCacheDir() const noexcept {
-    if(!m_sCacheDir.empty()) return m_sCacheDir;
-
-    if constexpr(Env::cfg(OS::LINUX) || Env::cfg(OS::MAC)) {
-        // $XDG_CACHE_HOME/neomod
-        if(const std::string xdg_cache_home = Environment::getEnvVariable("XDG_CACHE_HOME"); !xdg_cache_home.empty()) {
-            return (m_sCacheDir = xdg_cache_home + "/" PACKAGE_NAME);
-        }
-
-        // $HOME/.cache/neomod
-        if(const std::string home = Environment::getEnvVariable("HOME"); !home.empty()) {
-            return (m_sCacheDir = home + "/.cache/" PACKAGE_NAME);
-        }
-    }
-
-    if constexpr(Env::cfg(OS::WASM)) {
-        // /persist/cache
-        m_sCacheDir = "/persist/cache";
-    } else {
-        // ./cache
-        m_sCacheDir = MCENGINE_DATA_DIR "cache";
-    }
-    return m_sCacheDir;
 }
 
 // modifies the input filename! (checks case insensitively past the last slash)
@@ -488,9 +437,12 @@ bool Environment::deletePathsRecursive(const std::string &path, int maxRecursion
     // canonical absolute form with a trailing slash (safe now that we know the directory exists)
     const std::string curFolder = getFolderFromFilePath(path);
 
-    // never allow deleting the folder the executable lives in, or any ancestor of it
-    if(getExeFolder().starts_with(curFolder)) {
-        fubar_abort();
+    // never allow deleting the folder the executable or the bundled assets live in, or any ancestor of either
+    for(const auto &protectedFolder :
+        {getFolderFromFilePath(Mc::Paths::exe_dir()), getFolderFromFilePath(Mc::Paths::assets())}) {
+        if(!protectedFolder.empty() && protectedFolder.starts_with(curFolder)) {
+            fubar_abort();
+        }
     }
 
     for(const auto &file : getFilesInFolder(curFolder)) {
@@ -939,7 +891,7 @@ void Environment::openFileWindow(FileDialogCallback callback, const char *filety
     }
 
     if(initialpath.length() > 0 && !directoryExists(initialpath)) {
-        initialpath = getLocalDataPath();
+        initialpath = Mc::Paths::data();
     }
 
     auto *cbdata{new auto(std::move(callback))};
@@ -951,7 +903,7 @@ void Environment::openFileWindow(FileDialogCallback callback, const char *filety
 
 void Environment::openFolderWindow(FileDialogCallback callback, std::string_view initialpath) const noexcept {
     if(initialpath.length() > 0 && !directoryExists(initialpath)) {
-        initialpath = getLocalDataPath();
+        initialpath = Mc::Paths::data();
     }
 
     auto *cbdata{new auto(std::move(callback))};
@@ -961,14 +913,10 @@ void Environment::openFolderWindow(FileDialogCallback callback, std::string_view
 
 // just open the file manager in a certain folder, but not do anything with it
 void Environment::openFileBrowser(std::string_view initialpath) const noexcept {
-    std::string pathToOpen{initialpath};
-    if(pathToOpen.empty())
-        pathToOpen = getExeFolder();
-    else {
-        // XXX: On windows you can also open a folder while having a file selected
-        //      Would be useful for screenshots, for example
-        pathToOpen = getFolderFromFilePath(pathToOpen);
-    }
+    // XXX: On windows you can also open a folder while having a file selected
+    //      Would be useful for screenshots, for example
+    std::string pathToOpen =
+        getFolderFromFilePath(initialpath.empty() ? std::string_view{Mc::Paths::data()} : initialpath);
 
     if(pathToOpen.empty() || pathToOpen == "/") {
         debugLog("Couldn't parse a path to open from {}!", initialpath);

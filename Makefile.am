@@ -1584,9 +1584,20 @@ compile-commands: $(abs_top_srcdir)/.clangd
 
 # windows' loader has no concept of rpaths (so keep all built/required libs in the same level as the main exe)
 # otherwise we can tuck them away neatly in lib/ (besides ffmpeg, for self-inflicted reasons (dlopen in SoLoud, which won't find stuff in rpath))
-LIBDEST :=
-if !WIN_PLATFORM
-LIBDEST += lib/
+# the macOS app bundle keeps them in Contents/Frameworks (where the exe rpath points), assets in Contents/Resources,
+# and nothing but the executable in Contents/MacOS, so that the bundle can be code signed
+if MACOS_PLATFORM
+LIBDEST = ../Frameworks/
+FFMPEG_DEST = $(LIBDEST)
+ASSETDEST = ../Resources/
+else
+FFMPEG_DEST =
+ASSETDEST =
+if WIN_PLATFORM
+LIBDEST =
+else
+LIBDEST = lib/
+endif
 endif
 
 # more conditionals for each individual dependency depending on whether they were built locally, and also if they were built shared
@@ -1615,20 +1626,22 @@ else # !WASM_PLATFORM
 
 # --- directory creation (always runs) ---
 install-dirs:
-	$(INSTALL) -dm 755 "$(DESTDIR)$(bindir)/screenshots"
 	$(INSTALL) -dm 755 "$(DESTDIR)$(bindir)/$(LIBDEST)"
-	$(INSTALL) -dm 755 "$(DESTDIR)$(bindir)/fonts"
-	$(INSTALL) -dm 755 "$(DESTDIR)$(bindir)/materials"
-	$(INSTALL) -dm 755 "$(DESTDIR)$(bindir)/materials/default"
+	$(INSTALL) -dm 755 "$(DESTDIR)$(bindir)/$(ASSETDEST)fonts"
+	$(INSTALL) -dm 755 "$(DESTDIR)$(bindir)/$(ASSETDEST)materials"
+	$(INSTALL) -dm 755 "$(DESTDIR)$(bindir)/$(ASSETDEST)materials/default"
+if !MACOS_PLATFORM
+	$(INSTALL) -dm 755 "$(DESTDIR)$(bindir)/screenshots"
 	$(INSTALL) -dm 755 "$(DESTDIR)$(bindir)/cfg"
+endif
 
 # --- assets (fonts + materials) ---
 ASSET_FILES = $(wildcard $(srcdir)/$(ASSETS_DIR)/fonts/* $(srcdir)/$(ASSETS_DIR)/materials/* $(srcdir)/$(ASSETS_DIR)/materials/default/*)
 
 stamp-install-assets: $(ASSET_FILES) | install-dirs
-	find $(srcdir)/$(ASSETS_DIR)/fonts -type f -exec cp -f '{''}' "$(DESTDIR)$(bindir)/fonts" ';'
-	find $(srcdir)/$(ASSETS_DIR)/materials -mindepth 1 -maxdepth 1 -type f -exec cp -f '{''}' "$(DESTDIR)$(bindir)/materials" ';'
-	find $(srcdir)/$(ASSETS_DIR)/materials/default -mindepth 1 -maxdepth 1 -type f -exec cp -f '{''}' "$(DESTDIR)$(bindir)/materials/default" ';'
+	find $(srcdir)/$(ASSETS_DIR)/fonts -type f -exec cp -f '{''}' "$(DESTDIR)$(bindir)/$(ASSETDEST)fonts" ';'
+	find $(srcdir)/$(ASSETS_DIR)/materials -mindepth 1 -maxdepth 1 -type f -exec cp -f '{''}' "$(DESTDIR)$(bindir)/$(ASSETDEST)materials" ';'
+	find $(srcdir)/$(ASSETS_DIR)/materials/default -mindepth 1 -maxdepth 1 -type f -exec cp -f '{''}' "$(DESTDIR)$(bindir)/$(ASSETDEST)materials/default" ';'
 	@touch $@
 
 INSTALL_STAMPS += stamp-install-assets
@@ -1653,7 +1666,7 @@ endif
 if USE_SOLOUD
 	$(if $(STATICBUILD),,@$(CP_INSTALL) "$(SOLOUD_PREFIX)/lib"/*$(LIBPREFIX)soloud*$(DLLEXT)* "$(DESTDIR)$(bindir)/$(LIBDEST)")
 if USE_FFMPEG
-	@find $(DEPS_PREFIX)/lib $(DEPS_PREFIX)/bin '(' -name '*avutil*' -o -name '*avcodec*' -o -name '*avformat*' -o -name '*swresample*' -o -name '*swscale*' ')' -a '(' -name '*'$(DLLEXT) -o -name '*.so.*' ')' -exec $(CP_INSTALL) '{}' "$(DESTDIR)$(bindir)/" ';' 2>/dev/null || true
+	@find $(DEPS_PREFIX)/lib $(DEPS_PREFIX)/bin '(' -name '*avutil*' -o -name '*avcodec*' -o -name '*avformat*' -o -name '*swresample*' -o -name '*swscale*' ')' -a '(' -name '*'$(DLLEXT) -o -name '*.so.*' ')' -exec $(CP_INSTALL) '{}' "$(DESTDIR)$(bindir)/$(FFMPEG_DEST)" ';' 2>/dev/null || true
 endif
 if BUILD_MPG123
 	$(if $(STATICBUILD),,@`find $(MPG123_PREFIX) -not -path '*.dSYM/*' '(' -iname '*mpg*'$(DLLEXT) -o -iname '*mpg*''.so.*' ')' -exec $(CP_INSTALL) '{''}' "$(DESTDIR)$(bindir)/$(LIBDEST)" ';'`)
@@ -1723,14 +1736,14 @@ INSTALL_STAMPS += stamp-install-rpath
 endif
 
 # --- install_name_tool rpath (macos only) ---
-# rewrite absolute build-time install names to @loader_path so dylibs resolve
-# their dependencies from the directory they were installed to, not the build tree.
+# rewrite absolute build-time install names so dylibs resolve their dependencies from
+# the directory they were installed to (Contents/Frameworks), not the build tree.
 if MACOS_PLATFORM
 stamp-install-librpath: stamp-install-sharedlibs
-	@for dir in "$(DESTDIR)$(bindir)" "$(DESTDIR)$(bindir)/lib"; do \
+	@for dir in "$(DESTDIR)$(bindir)/$(LIBDEST)"; do \
 		test -d "$$dir" || continue; \
 		find "$$dir" -maxdepth 1 -name '*.dylib' | while read -r lib; do \
-			args="-id @loader_path/$$(basename "$$lib")"; \
+			args="-id @rpath/$$(basename "$$lib")"; \
 			for dep in $$(otool -L "$$lib" | $(SED) -n 's/^[[:space:]]*\([^[:space:]]*\).*/\1/p'); do \
 				depbn=$$(basename "$$dep"); \
 				test -f "$$dir/$$depbn" && args="$$args -change $$dep @loader_path/$$depbn"; \
@@ -1746,7 +1759,7 @@ stamp-install-exerpath: stamp-install-sharedlibs $(bin_PROGRAMS)
 		args=""; \
 		for dep in $$(otool -L "$(DESTDIR)$(bindir)/$$prog" | $(SED) -n 's/^[[:space:]]*\([^[:space:]]*\).*/\1/p'); do \
 			depbn=$$(basename "$$dep"); \
-			test -f "$(DESTDIR)$(bindir)/lib/$$depbn" && args="$$args -change $$dep @rpath/$$depbn"; \
+			test -f "$(DESTDIR)$(bindir)/$(LIBDEST)$$depbn" && args="$$args -change $$dep @rpath/$$depbn"; \
 		done; \
 		test -n "$$args" && $(INSTALL_NAME_TOOL) $$args "$(DESTDIR)$(bindir)/$$prog" 2>/dev/null || true; \
 	done
@@ -1759,9 +1772,11 @@ endif
 # --- generate .dSYM bundle (macos only, when debug info is present) ---
 # without this, sanitizer/lldb/atos backtraces only show binary offsets,
 # since debug info on mach-o stays in the .o files until dsymutil collects it.
+# it goes next to the .app, not inside it (nothing but the executable may live in Contents/MacOS)
 if RUN_DSYMUTIL
 stamp-install-dsym: stamp-install-sharedlibs $(INSTALL_RPATH_STAMP) $(bin_PROGRAMS)
-	$(DSYMUTIL) -j $(CPU_COUNT) --linker parallel "$(DESTDIR)$(bindir)/$(bin_PROGRAMS)"
+	rm -rf "$(DESTDIR)$(bindir)/$(bin_PROGRAMS).dSYM"
+	$(DSYMUTIL) -j $(CPU_COUNT) --linker parallel -o "$(DESTDIR)$(prefix)/$(bin_PROGRAMS).dSYM" "$(DESTDIR)$(bindir)/$(bin_PROGRAMS)"
 	@touch $@
 
 INSTALL_STAMPS += stamp-install-dsym
@@ -1777,6 +1792,9 @@ DSYM_PRE_STRIP_DEP =
 endif
 stamp-install-strip: stamp-install-sharedlibs $(INSTALL_RPATH_STAMP) $(bin_PROGRAMS) $(DSYM_PRE_STRIP_DEP)
 	-find "$(DESTDIR)$(bindir)" -name '*'$(DLLEXT)'*' -execdir $(STRIP) $(STRIP_ALL_FLAGS) '{''}' '+'
+if MACOS_PLATFORM
+	-find "$(DESTDIR)$(bindir)/$(LIBDEST)" -name '*'$(DLLEXT)'*' -execdir $(STRIP) $(STRIP_ALL_FLAGS) '{''}' '+'
+endif
 	-$(STRIP) $(STRIP_ALL_FLAGS) "$(DESTDIR)$(bindir)/$(bin_PROGRAMS)"
 	@touch $@
 

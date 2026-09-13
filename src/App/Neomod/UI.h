@@ -4,7 +4,6 @@
 #include "config.h"
 #include "noinclude.h"
 
-#include "OsuConfig.h"
 #include "Vectors_fwd.h"
 #include "CBaseUIEventCtx.h"
 

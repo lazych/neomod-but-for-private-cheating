@@ -23,6 +23,59 @@
     <string>6.0</string>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.games</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>15.0</string>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>osu! beatmap archive</string>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>osz</string>
+            </array>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>osu! skin archive</string>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>osk</string>
+            </array>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>osu! replay</string>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>osr</string>
+            </array>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+        </dict>
+    </array>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>net.neomodnet.neomod</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>neomod</string>
+                <string>neosu</string>
+            </array>
+        </dict>
+    </array>
     <key>LSSupportsGameMode</key>
     <true/>
     <key>NSHighResolutionCapable</key>

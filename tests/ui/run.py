@@ -9,6 +9,10 @@ usage:
 
 the binary is autodiscovered as the most recently built <repo>/*/dist/bin-*/neomod;
 --bin or the NEOMOD_BIN env var override it. --record or RECORD_GOLDEN=1 records goldens.
+
+read-only fixtures (uitest_osu_folder*, uitest_import) live next to the binary, since the scripts
+reference them relative to it; everything the runs write (cfg, dbs, the maps/ drop-zone, skins,
+screenshots, logs) goes to out/data via -datadir, so no run touches the install dir's state.
 """
 
 import argparse
@@ -31,6 +35,7 @@ SCRIPTS_DIR = TESTS_DIR / "scripts"
 GOLDEN_DIR = TESTS_DIR / "golden"
 PROBES_DIR = TESTS_DIR / "probes"
 OUT_DIR = TESTS_DIR / "out"
+DATA_DIR = OUT_DIR / "data"
 
 
 def find_binary(explicit):
@@ -93,10 +98,10 @@ def beatmap(title, version, audio, n_objects, set_id=-1):
     return "\n".join(lines) + "\n"
 
 
-def maps_set(bindir, folder, set_id, n_diffs):
-    """a raw beatmapset folder in the binary's maps/ drop-zone (metadata-only diffs), for the
+def maps_set(datadir, folder, set_id, n_diffs):
+    """a raw beatmapset folder in the data dir's maps/ drop-zone (metadata-only diffs), for the
     '# uitest-maps:' directive; run_one removes it again after the script."""
-    d = bindir / "maps" / folder
+    d = datadir / "maps" / folder
     d.mkdir(parents=True, exist_ok=True)
     for i in range(1, n_diffs + 1):
         (d / f"diff{i:02d}.osu").write_text(
@@ -120,12 +125,13 @@ def script_directives(text):
     return out
 
 
-def provision_fixtures(bindir):
-    """create the test fixtures next to the binary (assets are looked up relative to it)."""
+def provision_fixtures(bindir, datadir):
+    """create the test fixtures: read-only ones next to the binary (the scripts reference them
+    relative to it), writable state in the data dir."""
     # the skins dropdown only opens if at least one skin folder exists
     # (skins_dropdown_hover relies on the deterministic "default" + "UITestSkin" item pair);
     # the empty osu folder keeps songbrowser db loads empty and machine-independent
-    (bindir / "skins" / "UITestSkin").mkdir(parents=True, exist_ok=True)
+    (datadir / "skins" / "UITestSkin").mkdir(parents=True, exist_ok=True)
     (bindir / "uitest_osu_folder").mkdir(parents=True, exist_ok=True)
 
     # carousel fixture: ONE beatmapset with 20 diffs makes the carousel scrollable AND
@@ -172,29 +178,29 @@ def provision_fixtures(bindir):
                     z.writestr(f"diff{i:02d}.osu", beatmap(title, f"diff {i:02d}", "none.mp3", i, set_id))
 
 
-def run_one(name, binary, bindir, record):
+def run_one(name, binary, bindir, datadir, record):
     """run one script; print its result line(s); return True if it passed/recorded."""
     script = SCRIPTS_DIR / f"{name}.txt"
     log_path = OUT_DIR / f"{name}.log"
     out_trace = OUT_DIR / f"{name}.trace"
     diff_path = OUT_DIR / f"{name}.trace.diff"
     golden = GOLDEN_DIR / f"{name}.trace"
-    shot = bindir / "screenshots" / f"uitest_{name}.png"
+    shot = datadir / "screenshots" / f"uitest_{name}.png"
     shot.unlink(missing_ok=True)
 
-    # binary must run from its install dir (assets are relative). ui_validate_ticks is injected
-    # into the script's frame-0 batch (same frame as the preamble, so traces don't shift): every
-    # screen must be ticked every frame (debug builds)
+    # binary runs from its install dir (the read-only fixtures are relative to it), writes go to
+    # the data dir. ui_validate_ticks is injected into the script's frame-0 batch (same frame as
+    # the preamble, so traces don't shift): every screen must be ticked every frame (debug builds)
     text = script.read_text()
     directives = script_directives(text)
     fixture_dirs = []
     for spec in directives.get("maps", []):
         folder, set_id, n_diffs = (s.strip() for s in spec.split("|"))
-        fixture_dirs.append(maps_set(bindir, folder, int(set_id), int(n_diffs)))
+        fixture_dirs.append(maps_set(datadir, folder, int(set_id), int(n_diffs)))
     extra_args = [a for spec in directives.get("args", []) for a in shlex.split(spec)]
 
     proc = subprocess.run(
-        [f"./{binary.name}", "-headless", *extra_args],
+        [f"./{binary.name}", "-headless", "-datadir", str(datadir), *extra_args],
         cwd=bindir,
         input="ui_validate_ticks 1\n" + text,
         stdout=subprocess.PIPE,
@@ -208,7 +214,7 @@ def run_one(name, binary, bindir, record):
     for d in fixture_dirs:
         shutil.rmtree(d, ignore_errors=True)
     for folder in directives.get("cleanup", []):
-        shutil.rmtree(bindir / "maps" / folder, ignore_errors=True)
+        shutil.rmtree(datadir / "maps" / folder, ignore_errors=True)
 
     reasons = []
     if proc.returncode != 0:
@@ -293,7 +299,8 @@ def main():
     bindir = binary.parent
 
     OUT_DIR.mkdir(exist_ok=True)
-    provision_fixtures(bindir)
+    DATA_DIR.mkdir(exist_ok=True)
+    provision_fixtures(bindir, DATA_DIR)
 
     if args.scripts:
         names = args.scripts
@@ -303,7 +310,7 @@ def main():
     else:
         names = sorted(p.stem for p in SCRIPTS_DIR.glob("*.txt"))
 
-    passed = sum(run_one(name, binary, bindir, record) for name in names)
+    passed = sum(run_one(name, binary, bindir, DATA_DIR, record) for name in names)
     failed = len(names) - passed
 
     print("----")

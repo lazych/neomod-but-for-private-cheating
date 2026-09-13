@@ -13,6 +13,9 @@
 
 namespace MapExporter {
 
+// the folder exports land in: cv::export_folder if set, otherwise <data dir>/exports (always ends with a slash)
+std::string export_root();
+
 struct ExportContext {
     [[nodiscard]] bool operator==(const ExportContext& o) const;
     [[nodiscard]] std::strong_ordering operator<=>(const ExportContext& o) const;

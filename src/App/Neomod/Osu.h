@@ -5,8 +5,6 @@
 #include "Touch.h"
 #include "Rect.h"
 
-#include "OsuConfig.h"
-
 #include <atomic>
 #include <vector>
 #include <array>

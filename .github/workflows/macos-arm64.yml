@@ -95,10 +95,28 @@ jobs:
             ${{ (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/dev') && '--disable-strip' || '' }} && \
           gmake install
 
+      # TODO: ad-hoc until we have a Developer ID: it can't pass Gatekeeper (users still need right-click > Open),
+      # but it seals the bundle (proving the layout is signable) and gives the app a stable code identity.
+      # signed inside-out (nested dylibs first, then the app), which a real identity needs as well.
+      # with a Developer ID: import the certificate into a keychain, set IDENTITY to its name and add
+      # "--options runtime --timestamp" to both codesign calls (the hardened runtime's library validation
+      # rejects ad-hoc signed dylibs, so it can't be enabled before that)
+      - name: Sign app bundle
+        run: |
+          cd build-out
+          IDENTITY=-
+          find dist/neomod.app/Contents/Frameworks -name '*.dylib' -exec codesign --force --sign "$IDENTITY" {} +
+          codesign --force --sign "$IDENTITY" dist/neomod.app
+          codesign --verify --deep --strict --verbose=2 dist/neomod.app
+          codesign -dv --verbose=2 dist/neomod.app
+
+      # the dSYM lives next to the bundle now (only present for unstripped builds)
       - name: Package artifacts (fix symlinks)
         run: |
           cd build-out
-          zip -r -y -8 bin.zip ./dist/neomod.app
+          dsym=""
+          if [ -d dist/neomod.dSYM ]; then dsym=./dist/neomod.dSYM; fi
+          zip -r -y -8 bin.zip ./dist/neomod.app $dsym
           rm -rf dist/*
           mv bin.zip dist/
 

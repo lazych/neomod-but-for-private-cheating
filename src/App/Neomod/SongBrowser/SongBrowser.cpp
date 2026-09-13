@@ -3,6 +3,7 @@
 
 #include "Engine.h"
 #include "Environment.h"
+#include "Paths.h"
 #include "i18n.h"
 #include "Logging.h"
 #include "ResourceManager.h"
@@ -2723,7 +2724,7 @@ void SongBrowser::onDatabaseLoadingFinished(bool isNextScreenSongBrowser) {
     debugLog("Took {} seconds.", t.getElapsedTime());
 
     // Watch for new maps now
-    directoryWatcher->watch_directory(NEOMOD_MAPS_PATH "/", [this](const FileChangeEvent &ev) {
+    directoryWatcher->watch_directory(Mc::Paths::maps() + "/", [this](const FileChangeEvent &ev) {
         // a set folder dropped in (or changed, or removed) while running: remembered for tick(), which syncs the
         // db and the carousel with it once that's safe, and tells the installer's own writes (imports,
         // uninstalls) apart from real changes. a deletion can't be stat'ed (so on windows it isn't known to be
@@ -3505,7 +3506,7 @@ void SongBrowser::onCollectionButtonContextMenu(CollectionButton *collectionButt
         }
 
         // TODO: custom export name maybe
-        Environment::createDirectory(cv::export_folder.getString() + "/collections");
+        Environment::createDirectory(MapExporter::export_root() + "collections");
 
         auto ctx = MapExporter::ExportContext{
             .beatmap_folder_paths = pathsToExport,

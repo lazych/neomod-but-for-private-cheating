@@ -418,6 +418,10 @@ msgid "A new version of {} is ready!"
 msgstr ""
 
 #: src/App/Neomod/MainMenu.cpp
+msgid "A new version is available! Click to open the download page."
+msgstr ""
+
+#: src/App/Neomod/MainMenu.cpp
 msgid "Update Error! Click to retry ..."
 msgstr ""
 

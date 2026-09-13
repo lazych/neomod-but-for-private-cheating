@@ -8,6 +8,8 @@
     static_assert(str__[(sizeof(str__) / sizeof((str__)[0]) - 2)] == termchar__, \
                   #str__ " (" str__ ") must end with " #termchar__)
 
+// build-time default for where the bundled assets live (relative to the working directory, which setcwdexe()
+// points at the executable); the actual directories are resolved at startup, see Paths.h
 #ifndef MCENGINE_DATA_DIR
 
 #ifndef MCENGINE_DATA_ROOT
@@ -18,19 +20,9 @@
 
 #endif
 
-CASSERT_STR_ENDSWITH(MCENGINE_DATA_DIR, '/');
-
-/* *INDENT-OFF* */  // clang-format off
-
-#define MCENGINE_IMAGES_PATH	MCENGINE_DATA_DIR "materials"
-#define MCENGINE_FONTS_PATH		MCENGINE_DATA_DIR "fonts"
-#define MCENGINE_SOUNDS_PATH	MCENGINE_DATA_DIR "sounds"
-#define MCENGINE_SHADERS_PATH	MCENGINE_DATA_DIR "shaders"
-#ifdef MCENGINE_PLATFORM_WASM
-#define MCENGINE_CFG_PATH		"/persist/cfg"
-#else
-#define MCENGINE_CFG_PATH		MCENGINE_DATA_DIR "cfg"
+#ifndef APP_DATA_DIR
+#define APP_DATA_DIR MCENGINE_DATA_DIR
 #endif
-#define MCENGINE_LIB_PATH		MCENGINE_DATA_DIR "lib"
 
-/* *INDENT-ON* */  // clang-format on
+CASSERT_STR_ENDSWITH(MCENGINE_DATA_DIR, '/');
+CASSERT_STR_ENDSWITH(APP_DATA_DIR, '/');

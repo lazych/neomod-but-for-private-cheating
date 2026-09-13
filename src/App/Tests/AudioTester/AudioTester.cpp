@@ -14,6 +14,7 @@
 #include "Sound.h"
 #include "Timing.h"
 #include "Environment.h"
+#include "Paths.h"
 
 #include "SoLoudSoundEngine.h"
 #include "BassSoundEngine.h"
@@ -128,7 +129,7 @@ AudioTesterImpl::AudioTesterImpl() {
     }
 
     // generate WAV for bass comparison (will be used when user presses B)
-    const std::string tempDir = fmt::format("{}/.tmp/", env->getCacheDir());  // ~/.cache/neomod, on linux (probably)
+    const std::string tempDir = fmt::format("{}/.tmp/", Mc::Paths::cache());  // ~/.cache/neomod, on linux (probably)
     m_wavPath = tempDir + PACKAGE_NAME "_audiotester.wav";
 
     if(!env->createDirectory(tempDir) || !generateTestWav(m_wavPath)) {

@@ -3,6 +3,7 @@
 
 #include "TestMacros.h"
 #include "Engine.h"
+#include "Paths.h"
 #include "Resource.h"
 #include "ResourceManager.h"
 
@@ -21,7 +22,7 @@ SkinLoadTest::SkinLoadTest() {
     if(m_tier1_path) logRaw("  skin_tier1: {}", *m_tier1_path);
     if(m_tier2_path) logRaw("  skin_tier2: {}", *m_tier2_path);
     if(m_tier3_path) logRaw("  skin_tier3: {}", *m_tier3_path);
-    m_skin = std::make_unique<Skin>("default", MCENGINE_IMAGES_PATH "/default/");
+    m_skin = std::make_unique<Skin>("default", Mc::Paths::materials() + "/default/");
 }
 
 void SkinLoadTest::update() {
@@ -289,7 +290,7 @@ void SkinLoadTest::testDefaultSkin() {
     TEST_SECTION("default skin: search_dirs");
     {
         TEST_ASSERT_EQ((int)m_skin->search_dirs.size(), 1, "default skin has 1 search dir");
-        TEST_ASSERT_EQ(m_skin->search_dirs[0], std::string(MCENGINE_IMAGES_PATH "/default/"),
+        TEST_ASSERT_EQ(m_skin->search_dirs[0], Mc::Paths::materials() + "/default/",
                        "default skin search dir is the default path");
         TEST_ASSERT(m_skin->is_default, "default skin flag is set");
     }
@@ -331,7 +332,7 @@ void SkinLoadTest::testFakeSkin() {
         TEST_ASSERT_EQ((int)m_skin->search_dirs.size(), 2, "non-default skin has 2 search dirs");
         TEST_ASSERT_EQ(m_skin->search_dirs[0], std::string("/tmp/neomod_test_nonexistent_skin_dir/"),
                        "first search dir is user skin dir");
-        TEST_ASSERT_EQ(m_skin->search_dirs[1], std::string(MCENGINE_IMAGES_PATH "/default/"),
+        TEST_ASSERT_EQ(m_skin->search_dirs[1], Mc::Paths::materials() + "/default/",
                        "second search dir is default path");
         TEST_ASSERT(!m_skin->is_default, "default skin flag is not set");
     }
@@ -376,7 +377,7 @@ void SkinLoadTest::testRealSkin(const std::string &label, const std::string &ski
     {
         TEST_ASSERT_EQ((int)m_skin->search_dirs.size(), 2, label + " has 2 search dirs");
         TEST_ASSERT_EQ(m_skin->search_dirs[0], skinPath + "/", label + " primary dir is skin path");
-        TEST_ASSERT_EQ(m_skin->search_dirs[1], std::string(MCENGINE_IMAGES_PATH "/default/"),
+        TEST_ASSERT_EQ(m_skin->search_dirs[1], Mc::Paths::materials() + "/default/",
                        label + " fallback dir is default path");
         TEST_ASSERT(!m_skin->is_default, label + " is not default skin");
     }
@@ -440,7 +441,7 @@ void SkinLoadTest::testFallbackTier(const std::string &label, const std::string 
                                     const std::string &fallbackPath) {
     const std::string primaryDir = primaryPath + "/";
     const std::string fallbackDir = fallbackPath + "/";
-    const std::string defaultDir{MCENGINE_IMAGES_PATH "/default/"};
+    const std::string defaultDir{Mc::Paths::materials() + "/default/"};
 
     TEST_SECTION(label + ": search_dirs");
     {

@@ -26,6 +26,7 @@
 #include "RuntimePlatform.h"
 #include "Sound.h"
 #include "Environment.h"
+#include "Paths.h"
 #include "GameRules.h"
 #include "HUD.h"
 #include "HitObjects.h"
@@ -156,21 +157,21 @@ Osu::Osu()
 
     // create cache dir, with migration for old versions
     {
-        const std::string &cacheDir = env->getCacheDir();
+        const std::string &cacheDir = Mc::Paths::cache();
         Environment::createDirectory(cacheDir);
-        if(Environment::directoryExists(NEOMOD_DATA_DIR "avatars")) {
-            Environment::renameFile(NEOMOD_DATA_DIR "avatars", cacheDir + "/avatars");
+        if(Environment::directoryExists(Mc::Paths::data() + "/avatars")) {
+            Environment::renameFile(Mc::Paths::data() + "/avatars", cacheDir + "/avatars");
         }
         Environment::createDirectory(cacheDir + "/avatars");
         Environment::createDirectory(cacheDir + "/thumbs");
     }
 
     // create directories we will assume already exist later on
-    Environment::createDirectory(NEOMOD_CFG_PATH);
-    Environment::createDirectory(NEOMOD_MAPS_PATH);
-    Environment::createDirectory(NEOMOD_REPLAYS_PATH);
-    Environment::createDirectory(NEOMOD_SCREENSHOTS_PATH);
-    Environment::createDirectory(NEOMOD_SKINS_PATH);
+    Environment::createDirectory(Mc::Paths::cfg());
+    Environment::createDirectory(Mc::Paths::maps());
+    Environment::createDirectory(Mc::Paths::replays());
+    Environment::createDirectory(Mc::Paths::screenshots());
+    Environment::createDirectory(Mc::Paths::skins());
 
     mouse->addListener(this);
     touch->addListener(this);
@@ -264,7 +265,7 @@ Osu::Osu()
     Console::execConfigFile("override");  // used for quickfixing live builds without redeploying/recompiling
 
     // if we don't have an osu.cfg, import
-    if(!Environment::fileExists(NEOMOD_CFG_PATH "/osu.cfg")) {
+    if(!Environment::fileExists(Mc::Paths::cfg() + "/osu.cfg")) {
         SettingsImporter::import_from_mcosu();
         SettingsImporter::import_from_osu_stable();
     }
@@ -349,13 +350,6 @@ Osu::Osu()
     this->songBrowserFontBold =
         resourceManager->loadFont("SourceSansPro-Bold", "FONT_OSU_SONGBROWSER_BOLD", 30, true, newDPI);
 
-    {
-        const std::string newIconFontPath = MCENGINE_FONTS_PATH "/forkawesome.ttf";
-        const std::string oldIconFontPath = MCENGINE_FONTS_PATH "/forkawesome-webfont.ttf";
-        if(!Environment::fileExists(newIconFontPath) && Environment::fileExists(oldIconFontPath)) {
-            Environment::renameFile(oldIconFontPath, newIconFontPath);
-        }
-    }
     this->fontIcons = resourceManager->loadFont("forkawesome", "FONT_OSU_ICONS", Icons::icons, 26, true, newDPI);
 
     this->fonts.push_back(defaultFont);
@@ -426,15 +420,15 @@ void Osu::doDeferredInitTasks() {
 
     // extract osks & watch for osks to extract
     {
-        const auto osks = env->getFilesInFolder(NEOMOD_SKINS_PATH "/");
+        const auto osks = env->getFilesInFolder(Mc::Paths::skins() + "/");
         for(const auto &file : osks) {
             if(env->getFileExtensionFromFilePath(file) != "osk") continue;
-            auto path = NEOMOD_SKINS_PATH "/" + file;
+            auto path = Mc::Paths::skins() + "/" + file;
             const bool extracted = neomod::handle_osk(path, /*auto_select=*/false);
             if(extracted) env->deleteFile(path);
         }
 
-        directoryWatcher->watch_directory(NEOMOD_SKINS_PATH "/", [](const FileChangeEvent &ev) -> void {
+        directoryWatcher->watch_directory(Mc::Paths::skins() + "/", [](const FileChangeEvent &ev) -> void {
             if(ev.type != FileChangeType::CREATED) return;
             logRaw("[DirectoryWatcher] Importing new skin {}: type {}", ev.path, static_cast<u32>(ev.type));
             if(env->getFileExtensionFromFilePath(ev.path) != "osk") return;
@@ -1386,8 +1380,8 @@ void Osu::saveScreenshot() {
         Async::submit(
             [graphicsRes = g->getResolution(), internalRes, pixels = std::move(pixelData)]() -> SaveResult {
                 SaveResult ret;
-                if(!Environment::directoryExists(NEOMOD_SCREENSHOTS_PATH) &&
-                   !Environment::createDirectory(NEOMOD_SCREENSHOTS_PATH)) {
+                if(!Environment::directoryExists(Mc::Paths::screenshots()) &&
+                   !Environment::createDirectory(Mc::Paths::screenshots())) {
                     ret.error = "Error: Couldn't create screenshots folder.";
                     return ret;
                 }
@@ -1396,7 +1390,7 @@ void Osu::saveScreenshot() {
 
                 do {
                     ret.savePath =
-                        fmt::format(NEOMOD_SCREENSHOTS_PATH "/screenshot{}.png", screenshotNumber.fetch_add(1));
+                        fmt::format("{}/screenshot{}.png", Mc::Paths::screenshots(), screenshotNumber.fetch_add(1));
                 } while(Environment::fileExists(ret.savePath));
 
                 const f32 outerWidth = graphicsRes.x;
@@ -1878,7 +1872,7 @@ void Osu::onSkinReload() {
 static std::string resolveSkinPath(std::string_view skinName) {
     if(skinName.empty() || skinName == "default") return {};
 
-    std::string neomodFolder = fmt::format(NEOMOD_SKINS_PATH "/{}/", skinName);
+    std::string neomodFolder = fmt::format("{}/{}/", Mc::Paths::skins(), skinName);
     if(env->directoryExists(neomodFolder)) return neomodFolder;
 
     std::string ppyFolder{
@@ -1902,7 +1896,7 @@ void Osu::onSkinChange(std::string_view newSkinName) {
 
     if(newSkinName == "default") {
         this->skinScheduledToLoad =
-            new Skin(std::string{newSkinName}, MCENGINE_IMAGES_PATH "/default/", std::move(fallbackDir));
+            new Skin(std::string{newSkinName}, Mc::Paths::materials() + "/default/", std::move(fallbackDir));
         if(!this->skin) this->skin.reset(this->skinScheduledToLoad);
         this->bSkinLoadScheduled = true;
         return;

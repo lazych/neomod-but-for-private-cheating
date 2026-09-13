@@ -4,7 +4,7 @@
 #if defined(MCENGINE_FEATURE_FFMPEG)
 
 #include "FFmpegLoader.h"
-#include "EngineConfig.h"
+#include "Paths.h"
 #include "dynutils.h"
 #include "SyncMutex.h"
 #include "SyncOnce.h"
@@ -149,7 +149,7 @@ struct FFmpegFuncset {
 bool load_full_ff_lib(const std::array<FFmpegFuncset, 4> &ffmpeg_funcsets) {
     for(auto &funcset : ffmpeg_funcsets) {
         const std::string trypath2 = LNAMESTR(funcset.bare_libname, funcset.libversion);
-        const std::string trypath1 = fmt::format(MCENGINE_LIB_PATH "/{}", trypath2);
+        const std::string trypath1 = fmt::format("{}/{}", Mc::Paths::libs(), trypath2);
         if(!(*funcset.libhandle_ref = dynutils::load_lib(trypath1.c_str())) &&
            !(*funcset.libhandle_ref = dynutils::load_lib(trypath2.c_str()))) {
             ld_ctx().error_string.append(fmt::format("Failed to load {:s}-{:d} (error: {:s})\n", funcset.bare_libname,

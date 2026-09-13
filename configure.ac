@@ -751,7 +751,7 @@ __EOF__
     LIBPREFIX="lib"
     EXEEXT=".html"
     AC_DEFINE([MCENGINE_PLATFORM_WASM], [1], [Define if compiling for WASM with Emscripten.])
-    AC_DEFINE([NEOMOD_DATA_DIR], ["/persist/"], [Persistent writable data directory for WASM.])
+    AC_DEFINE([APP_DATA_DIR], ["/persist/"], [Persistent writable data directory for WASM.])
 
 ], [linux-gnu], [
 
@@ -842,8 +842,8 @@ __EOF__
 
     AC_SUBST([NASMOBJ],[macho64])
 
-    # fixup linker runtime paths (mirror linux, but macOS uses @loader_path instead of $ORIGIN)
-    NATIVE_LDFLAGS="-Wl,-rpath,@loader_path/lib -Wl,-rpath,@loader_path"
+    # fixup linker runtime paths (the app bundle keeps its dylibs in Contents/Frameworks)
+    NATIVE_LDFLAGS="-Wl,-rpath,@executable_path/../Frameworks"
     AC_SUBST([NATIVE_LDFLAGS])
 
     AC_DEFINE([MCENGINE_PLATFORM_MACOS], [1], [Define if compiling for macOS.])

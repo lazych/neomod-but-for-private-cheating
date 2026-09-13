@@ -1,7 +1,7 @@
 // Copyright (c) 2026, WH, All rights reserved.
 #include "MapExporter.h"
 
-#include "OsuConfig.h"
+#include "Paths.h"
 #include "OsuConVars.h"
 #include "Timing.h"
 #include "Archival.h"
@@ -32,20 +32,18 @@ std::strong_ordering ExportContext::operator<=>(const ExportContext &o) const {
     }
 }
 
+std::string export_root() {
+    std::string root = cv::export_folder.getString();
+    if(root.empty()) root = Mc::Paths::exports();
+    File::normalizeSlashes(root, '\\', '/');
+    if(!root.ends_with('/')) root.push_back('/');
+    return root;
+}
+
 Async::CancellableHandle<void> submit_export(std::set<ExportContext> contexts, Async::Channel<Notification> &out) {
     return Async::submit_cancellable(
         [contexts = std::move(contexts), &out](const Sync::stop_token &tok) mutable -> void {
-            const std::string export_folder_top = []() -> std::string {
-                std::string temp = cv::export_folder.getString();
-                if(temp.empty()) {
-                    temp = NEOMOD_DATA_DIR "exports/"sv;
-                }
-                File::normalizeSlashes(temp, '\\', '/');
-                if(!temp.ends_with('/')) {
-                    temp.push_back('/');
-                }
-                return temp;
-            }();
+            const std::string export_folder_top = export_root();
 
             if(!Environment::directoryExists(export_folder_top)) {
                 if(!Environment::createDirectory(export_folder_top)) {
