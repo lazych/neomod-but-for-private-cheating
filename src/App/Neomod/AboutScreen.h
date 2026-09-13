@@ -21,15 +21,15 @@ class AboutScreen final : public ScreenBackable {
     CBaseUIContainer *setVisible(bool visible) override;
 
     void updateInput(CBaseUIEventCtx &c) override;
+    void updateLayout() override;
+    void onBack() override;
 
+   protected:
     // the tab strip isn't a scroll surface, so a wheel over it would fall through to the volume
     // sink: claim it screen-wide and forward to the active tab (same as SongBrowser's carousel)
     bool onWheel(int deltaVertical, int deltaHorizontal) override;
 
    private:
-    void updateLayout() override;
-    void onBack() override;
-
     void onChangeClicked(CBaseUIButton *button);
 
     struct CHANGELOG {

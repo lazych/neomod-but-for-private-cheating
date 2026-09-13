@@ -28,7 +28,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-24.04-arm
-    container: whrvt/neosu-linux-aarch64:latest
+    container: whrvt/neomod-linux-aarch64:latest
     defaults:
       run:
         working-directory: .
@@ -73,14 +73,13 @@ jobs:
           restore-keys: |
             ccache-linux-aarch64-
 
-      # TODO: add things required for sdl_gpu build to aarch64 container image
       - name: Building neomod
         run: |
           ./autogen.sh
           export MAKEFLAGS="-j$(nproc)"
           export CCACHE_DIR="${{ env.CCACHE_DIR }}"
           cd build-out && \
-          ../configure --disable-tests --with-renderer=opengl \
+          ../configure --disable-tests --with-renderer=opengl,sdlgpu \
             ${{ (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/dev') && '--disable-strip' || '' }} \
             --host=aarch64-pc-linux-gnu && \
           make install

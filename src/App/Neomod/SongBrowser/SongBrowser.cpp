@@ -121,6 +121,7 @@ class ScoresStillLoadingElement final : public CBaseUILabel {
         : CBaseUILabel(0, 0, 0, 0, "", std::move(text)),
           sIconString(UniString::to_utf8(std::u32string_view{&Icons::GLOBE, 1})) {}
 
+   protected:
     void drawText() override {
         // draw icon
         const float iconScale = 0.6f;
@@ -170,6 +171,7 @@ class NoRecordsSetElement final : public CBaseUILabel {
         : CBaseUILabel(0, 0, 0, 0, "", std::move(text)),
           sIconString(UniString::to_utf8(std::u32string_view{&Icons::TROPHY, 1})) {}
 
+   protected:
     void drawText() override {
         // draw icon
         const float iconScale = 0.6f;

@@ -28,7 +28,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: whrvt/neosu-linux:latest
+    container: whrvt/neomod-linux:latest
     strategy:
       matrix:
         arch: [x64, x32]
