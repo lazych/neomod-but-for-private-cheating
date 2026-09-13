@@ -3,6 +3,8 @@
 #include "InputDevice.h"
 #include "Vectors.h"
 
+#include <vector>
+
 struct Finger final {
     // unique id from the moment the finger is pressed until the finger is released
     u64 id;

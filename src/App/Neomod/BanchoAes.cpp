@@ -2,12 +2,14 @@
 
 // AES with 32-byte key size and 32-byte block size.
 // Full of magic values (as usual in crypto), but this will never get edited again.
-#include <algorithm>
-#include <cstring>
 
 #include "noinclude.h"
 #include "BanchoNetworking.h"
 #include "BanchoAes.h"
+
+#include <array>
+#include <algorithm>
+#include <cstring>
 
 namespace {  // static
 
