@@ -53,6 +53,7 @@ release/
 /config.status
 /src/stamp-h1
 .dirstamp
+opencode.json
 
 /autom4te.cache
 /configure~
