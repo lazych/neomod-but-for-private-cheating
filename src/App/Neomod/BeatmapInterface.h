@@ -414,7 +414,9 @@ class BeatmapInterface final : public AbstractBeatmapInterface {
 
     // aim assist
     vec2 vAimAssistOffset{0.f};
+    vec2 vAimAssistLastMouse{0.f};
     bool bAimAssistEngaged{false};
+    bool bAimAssistHasLastMouse{false};
 
     // live and precomputed pp/stars
     void resetLiveStarsTasks();

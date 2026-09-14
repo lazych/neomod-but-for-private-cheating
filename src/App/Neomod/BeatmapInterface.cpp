@@ -4206,6 +4206,18 @@ void BeatmapInterface::updateAimAssist() {
     const i32 windowMS = std::max(cv::aimassist_window_ms.getInt(), 0);
     const vec2 mouse = this->getMousePos();
 
+    const f32 dt = std::clamp<f32>((f32)engine->getFrameTime(), 0.0001f, 1.0f / 30.0f);
+
+    // only engage while the cursor is actually moving
+    f32 mouseSpeed = 0.0f;
+    if(this->bAimAssistHasLastMouse) {
+        mouseSpeed = vec::length(mouse - this->vAimAssistLastMouse) / dt;
+    }
+    this->vAimAssistLastMouse = mouse;
+    this->bAimAssistHasLastMouse = true;
+
+    const bool bCursorMoving = (mouseSpeed >= cv::aimassist_minspeed.getFloat());
+
     // find the closest eligible hitobject within the engage radius
     const f32 radiusSq = radius * radius;
     vec2 bestTarget{0.f};
@@ -4236,9 +4248,7 @@ void BeatmapInterface::updateAimAssist() {
         }
     }
 
-    const f32 dt = std::clamp<f32>((f32)engine->getFrameTime(), 0.0f, 1.0f / 30.0f);
-
-    if(radius <= 0.0f || bestDistSq >= radiusSq) {
+    if(radius <= 0.0f || bestDistSq >= radiusSq || !bCursorMoving) {
         // no target in range: exponentially ease the pull offset back to zero
         this->vAimAssistOffset *= std::exp(-15.0f * dt);
         if(vec::length(this->vAimAssistOffset) < 0.5f) this->vAimAssistOffset = vec2{0.f};

@@ -436,16 +436,18 @@ CONVAR(ar_overridenegative, 0.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
 CONVAR(autopilot_lenience, 0.75f, CLIENT | SERVER | PROTECTED | GAMEPLAY);
 CONVAR(autopilot_snapping_strength, 2.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
        "How many iterations of quadratic interpolation to use, more = snappier, 0 = linear");
-CONVAR(aimassist, false, CLIENT | SERVER | PROTECTED | GAMEPLAY,
+CONVAR(aimassist, false, CLIENT | SERVER,
        "magnetize cursor toward the nearest upcoming/active hitobject");
-CONVAR(aimassist_strength, 0.45f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
+CONVAR(aimassist_strength, 0.45f, CLIENT | SERVER,
        "how strongly the cursor is pulled toward the target (0 = off, 1 = max pull)");
-CONVAR(aimassist_radius, 120.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
+CONVAR(aimassist_radius, 120.0f, CLIENT | SERVER,
        "screen-pixel distance from a hitobject at which aim assist engages");
-CONVAR(aimassist_window_ms, 400, CLIENT | SERVER | PROTECTED | GAMEPLAY,
+CONVAR(aimassist_window_ms, 400, CLIENT | SERVER,
        "how early (ms) before a hitobject's click time it may be targeted");
-CONVAR(aimassist_deadzone, 14.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
+CONVAR(aimassist_deadzone, 14.0f, CLIENT | SERVER,
        "screen pixels from a hitobject center at which the assist disengages, prevents center-locking");
+CONVAR(aimassist_minspeed, 18.0f, CLIENT | SERVER,
+       "minimum cursor speed (px/s) for the assist to engage; assist only activates while moving");
 CONVAR(cs_override, -1.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
        "use this to override between CS 0 and CS 12.1429. active if value is more than or equal to 0.");
 CONVAR(cs_overridenegative, 0.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
