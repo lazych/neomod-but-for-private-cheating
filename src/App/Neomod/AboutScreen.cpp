@@ -396,8 +396,15 @@ void AboutScreen::onChangeClicked(CBaseUIButton *button) {
 void AboutScreen::buildChangelog() {
     std::vector<CHANGELOG> changelogs;
 
+    CHANGELOG v43_14;
+    v43_14.title = "43.14 (" CHANGELOG_TIMESTAMP ")";
+    v43_14.changes = {
+        R"(- Fixed startup crashing in some cases)",
+    };
+    changelogs.push_back(std::move(v43_14));
+
     CHANGELOG v43_13;
-    v43_13.title = "43.13 (" CHANGELOG_TIMESTAMP ")";
+    v43_13.title = "43.13 (2026-09-13)";
     v43_13.changes = {
         R"(- Added ASIO output support for SoLoud (Windows))",
         R"(  - If you were previously using BASSASIO, try SoLoud and give feedback on latency/stability!)",
