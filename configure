@@ -920,6 +920,7 @@ NOIME
 STATICBUILD
 DISABLE_NATIVE
 REALPATH
+HOMEBREW_PREFIX
 LLD
 MOLD
 WINE
@@ -7069,9 +7070,19 @@ esac
 
 fi
 
+HOMEBREW_PREFIX=
 case "$build_os" in #(
   darwin*) :
 
+    HOMEBREW_PREFIX="$(brew --prefix)"
+
+    if test -z $HOMEBREW_PREFIX
+then :
+
+        { printf '%s\n' "$as_me:${as_lineno-$LINENO}: \"brew --prefix\" is empty, you will likely need to install homebrew for some build-time dependencies!" >&5
+printf '%s\n' "$as_me: \"brew --prefix\" is empty, you will likely need to install homebrew for some build-time dependencies!" >&6;}
+
+fi
     # also try to find gnu realpath
     # Extract the first word of "realpath", so it can be a program name with args.
 set dummy realpath; ac_word=$2
@@ -7087,7 +7098,7 @@ else case e in #(
   ;;
   *)
   as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-as_dummy="/opt/homebrew/opt/coreutils/libexec/gnubin:$PATH"
+as_dummy="$HOMEBREW_PREFIX/opt/coreutils/libexec/gnubin:$PATH"
 for as_dir in $as_dummy
 do
   IFS=$as_save_IFS
@@ -8449,7 +8460,7 @@ else case e in #(
   ;;
   *)
   as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-as_dummy="/opt/homebrew/opt/llvm/bin:$PATH"
+as_dummy="$HOMEBREW_PREFIX/opt/llvm/bin:$PATH"
 for as_dir in $as_dummy
 do
   IFS=$as_save_IFS
@@ -8496,7 +8507,7 @@ else case e in #(
   ;;
   *)
   as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-as_dummy="/opt/homebrew/opt/llvm/bin:$PATH"
+as_dummy="$HOMEBREW_PREFIX/opt/llvm/bin:$PATH"
 for as_dir in $as_dummy
 do
   IFS=$as_save_IFS
@@ -11417,7 +11428,7 @@ else case e in #(
   ;;
   *)
   as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-as_dummy="/opt/homebrew/opt/llvm/bin:$PATH"
+as_dummy="$HOMEBREW_PREFIX/opt/llvm/bin:$PATH"
 for as_dir in $as_dummy
 do
   IFS=$as_save_IFS
@@ -11468,7 +11479,7 @@ else case e in #(
   ;;
   *)
   as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-as_dummy="/opt/homebrew/opt/llvm/bin:$PATH"
+as_dummy="$HOMEBREW_PREFIX/opt/llvm/bin:$PATH"
 for as_dir in $as_dummy
 do
   IFS=$as_save_IFS

@@ -346,10 +346,16 @@ AS_IF([test "x$enable_clang" = "x"], [
     )
 ])
 
+HOMEBREW_PREFIX=
 AS_CASE(["$build_os"], 
 [darwin*], [
+    HOMEBREW_PREFIX="$(brew --prefix)"
+    AC_SUBST([HOMEBREW_PREFIX])
+    AS_IF([test -z $HOMEBREW_PREFIX], [
+        AC_MSG_NOTICE(["brew --prefix" is empty, you will likely need to install homebrew for some build-time dependencies!])
+    ])
     # also try to find gnu realpath
-    AC_PATH_PROG([REALPATH], [realpath], [realpath], [/opt/homebrew/opt/coreutils/libexec/gnubin:$PATH])
+    AC_PATH_PROG([REALPATH], [realpath], [realpath], [$HOMEBREW_PREFIX/opt/coreutils/libexec/gnubin:$PATH])
 ], [*], [
     AC_CHECK_PROG([REALPATH], [realpath], [realpath])
 ])
@@ -811,8 +817,8 @@ __EOF__
 
 ], [darwin*], [ # macOS
 
-    AC_PATH_PROG([CC_FOUND], [$CC], [], [/opt/homebrew/opt/llvm/bin:$PATH])
-    AC_PATH_PROG([CXX_FOUND], [$CXX], [], [/opt/homebrew/opt/llvm/bin:$PATH])
+    AC_PATH_PROG([CC_FOUND], [$CC], [], [$HOMEBREW_PREFIX/opt/llvm/bin:$PATH])
+    AC_PATH_PROG([CXX_FOUND], [$CXX], [], [$HOMEBREW_PREFIX/opt/llvm/bin:$PATH])
 
     cat > "$PWD/build/$target-$CC" <<EOF
 #!/usr/bin/env bash
@@ -1207,9 +1213,9 @@ AS_IF([test -n "$WASM_CC"], [
     AC_PATH_PROG([RANLIB], [emranlib])
     AS_IF([test -z "$RANLIB"], [AC_MSG_ERROR([emranlib not found])])
 ], [test "x$enable_clang" = "xyes"], [
-    AC_PATH_PROG([AR], [llvm-ar], [], [/opt/homebrew/opt/llvm/bin:$PATH])
+    AC_PATH_PROG([AR], [llvm-ar], [], [$HOMEBREW_PREFIX/opt/llvm/bin:$PATH])
     AS_IF([test -z "$AR"], [AC_MSG_ERROR([llvm-ar not found])])
-    AC_PATH_PROG([RANLIB], [llvm-ranlib], [], [/opt/homebrew/opt/llvm/bin:$PATH])
+    AC_PATH_PROG([RANLIB], [llvm-ranlib], [], [$HOMEBREW_PREFIX/opt/llvm/bin:$PATH])
     AS_IF([test -z "$RANLIB"], [AC_MSG_ERROR([llvm-ranlib not found])])
 ], [
     AC_PATH_TOOL([AR], [ar], [AC_MSG_ERROR([ar not found])])

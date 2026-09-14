@@ -439,7 +439,7 @@ $(DEPS_PREFIX)/mpg123-$(MPG123_VERSION).built: $(DEPS_CACHE)/mpg123-$(MPG123_VER
 	patch -Np1<$(BUILD_MISCDIR)/0001-libmpg123-initial-support-for-VBRI-tag-parsing.patch && \
 	patch -Np1<$(BUILD_MISCDIR)/0002-libmpg123-hardcode-aarch64-neon.patch && \
 	$(if $(ubercompat),$(SED) -i -e 's|.*ThreadErrorMode.*||g' -e 's|mode_ok|0|' src/compat/compat_dl.c,true) && \
-	ACLOCAL_PATH="/opt/homebrew/opt/libtool/share/aclocal:$$ACLOCAL_PATH" autoreconf -fiv && cd $(DEPS_PREFIX)/mpg123/build && \
+	ACLOCAL_PATH="$(HOMEBREW_PREFIX)/opt/libtool/share/aclocal:$$ACLOCAL_PATH" autoreconf -fiv && cd $(DEPS_PREFIX)/mpg123/build && \
 	PKG_CONFIG="$(PKG_CONFIG)" \
 		$(CONFIGURE_PFX) ../configure $(LT_GNU_LD_CACHE) --host=$(host) --prefix="$(DEPS_PREFIX)" $(if $(STATICBUILD),--enable-static --disable-shared,--enable-shared --disable-static) \
 		--disable-components --enable-libmpg123 --with-audio=dummy --disable-modules \

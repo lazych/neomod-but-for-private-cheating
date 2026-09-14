@@ -1134,6 +1134,7 @@ GLU_LIBS = @GLU_LIBS@
 GL_CFLAGS = @GL_CFLAGS@
 GL_LIBS = @GL_LIBS@
 GREP = @GREP@
+HOMEBREW_PREFIX = @HOMEBREW_PREFIX@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_NAME_TOOL = @INSTALL_NAME_TOOL@
@@ -8184,7 +8185,7 @@ $(CACERT_INCDIR)/cacert.pem:
 @BUILD_MPG123_TRUE@	patch -Np1<$(BUILD_MISCDIR)/0001-libmpg123-initial-support-for-VBRI-tag-parsing.patch && \
 @BUILD_MPG123_TRUE@	patch -Np1<$(BUILD_MISCDIR)/0002-libmpg123-hardcode-aarch64-neon.patch && \
 @BUILD_MPG123_TRUE@	$(if $(ubercompat),$(SED) -i -e 's|.*ThreadErrorMode.*||g' -e 's|mode_ok|0|' src/compat/compat_dl.c,true) && \
-@BUILD_MPG123_TRUE@	ACLOCAL_PATH="/opt/homebrew/opt/libtool/share/aclocal:$$ACLOCAL_PATH" autoreconf -fiv && cd $(DEPS_PREFIX)/mpg123/build && \
+@BUILD_MPG123_TRUE@	ACLOCAL_PATH="$(HOMEBREW_PREFIX)/opt/libtool/share/aclocal:$$ACLOCAL_PATH" autoreconf -fiv && cd $(DEPS_PREFIX)/mpg123/build && \
 @BUILD_MPG123_TRUE@	PKG_CONFIG="$(PKG_CONFIG)" \
 @BUILD_MPG123_TRUE@		$(CONFIGURE_PFX) ../configure $(LT_GNU_LD_CACHE) --host=$(host) --prefix="$(DEPS_PREFIX)" $(if $(STATICBUILD),--enable-static --disable-shared,--enable-shared --disable-static) \
 @BUILD_MPG123_TRUE@		--disable-components --enable-libmpg123 --with-audio=dummy --disable-modules \
