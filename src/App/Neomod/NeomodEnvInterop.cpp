@@ -16,6 +16,7 @@
 #include "Logging.h"
 #include "SString.h"
 #include "LaunchArgs.h"
+#include "Paths.h"
 
 namespace neomod {
 namespace {
@@ -385,7 +386,7 @@ void NeomodEnvInterop::setup_system_integrations() {
     cmdline.erase(cmdline.begin());  // remove program name
 
     const std::wstring uLaunchArgs{UniString::to_wide(SString::join(cmdline))};
-    const std::wstring uExePath{UniString::to_wide(Environment::getPathToSelf())};
+    const std::wstring uExePath{UniString::to_wide(Mc::Paths::exe())};
 
     std::wstring command;
     command.resize(uExePath.length() + uLaunchArgs.length() + 10);

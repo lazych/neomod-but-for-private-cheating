@@ -116,6 +116,7 @@ class ChangelogTitleLabel final : public CBaseUILabel {
         CBaseUILabel::draw();
     }
 
+   protected:
     void onMouseUpInside(bool /*left*/ = true, bool /*right*/ = false) override {
         if(!this->clickableURL.empty()) {
             env->openURLInDefaultBrowser(this->clickableURL);

@@ -3,20 +3,21 @@
 #pragma once
 
 #include <string>
-#include <string_view>
 
 namespace Mc::Paths {
 
-// switches the working directory to the executable's folder (unless the packager moved the data dir at build
-// time) and resolves the directory layout below. intended to be called once early in main() (needs the launch
-// args parsed), before logging is initialized; every accessor returns an empty string until then
+// resolves the full path to the running executable, switches the working directory to its folder (unless the
+// packager moved the data dir at build time) and resolves the directory layout below. intended to be called once
+// early in main() (needs the launch args parsed), before logging is initialized; every accessor returns an empty
+// string until then
 namespace detail {
-void init(std::string_view exe_path);
+void init();
 }
 
 // all directories are returned without a trailing slash
 
 // shipped with the app (read-only)
+const std::string &exe();        // full canonical path to the executable file itself
 const std::string &exe_dir();    // the folder containing the executable
 const std::string &assets();     // root of the bundled assets
 const std::string &fonts();      // <assets>/fonts

@@ -12,14 +12,25 @@
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include <array>
+#include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <memory>
+#include <string_view>
+
+#if defined(MCENGINE_PLATFORM_WINDOWS)
+#include "WinDebloatDefs.h"
+#include <libloaderapi.h>  // GetModuleFileNameW
+#elif defined(MCENGINE_PLATFORM_MACOS)
+#include <mach-o/dyld.h>  // _NSGetExecutablePath
+#endif
 
 namespace Mc::Paths {
 
 namespace {
 struct Dirs {
-    std::string exe_dir, assets, fonts, materials, libs;
+    std::string exe, exe_dir, assets, fonts, materials, libs;
     std::string data, cfg, maps, skins, replays, screenshots, exports, db, cache, logs;
 } s_dirs;
 
@@ -27,39 +38,84 @@ std::string strip_trailing_slashes(std::string_view path) {
     while(path.size() > 1 && (path.ends_with('/') || path.ends_with('\\'))) path.remove_suffix(1);
     return std::string{path};
 }
+
+// full canonical path to the running executable
+std::filesystem::path resolve_exe_path() {
+    namespace fs = std::filesystem;
+
+    std::error_code ec;
+    fs::path exe_path;
+    if constexpr(Env::cfg(OS::WASM)) {
+        exe_path = MCENGINE_DATA_DIR;
+    } else if constexpr(Env::cfg(OS::LINUX)) {
+        exe_path = fs::canonical("/proc/self/exe", ec);
+    } else if constexpr(Env::cfg(OS::MAC)) {
+#if defined(MCENGINE_PLATFORM_MACOS)
+        // what dyld reports may go through symlinks (or be relative), so it still needs canonicalizing
+        uint32_t size = 0;
+        _NSGetExecutablePath(nullptr, &size);  // fails and reports the required buffer size
+        std::string exe(size, '\0');
+        if(_NSGetExecutablePath(exe.data(), &size) == 0) exe_path = fs::canonical(exe.c_str(), ec);
+#endif
+    } else {
+        const auto [argc, argv] = LaunchArgs::get_c();
+        const std::string_view argv0 = argc > 0 && argv[0] ? argv[0] : "";
+        if constexpr(Env::cfg(OS::WINDOWS)) {
+            exe_path = fs::canonical(UniString::to_wide(argv0), ec);
+        } else {
+            exe_path = fs::canonical(argv0, ec);
+        }
+    }
+    if(!ec && !exe_path.empty()) return exe_path;
+
+#if defined(MCENGINE_PLATFORM_WINDOWS)  // fallback to GetModuleFileNameW
+    std::array<wchar_t, MAX_PATH + 1> buf{};
+    const size_t length = static_cast<size_t>(GetModuleFileNameW(nullptr, buf.data(), MAX_PATH));
+    return std::wstring{buf.data(), length};
+#else
+#if !defined(MCENGINE_PLATFORM_LINUX) && !defined(MCENGINE_PLATFORM_MACOS)
+    debugLog("WARNING: unsupported platform");
+#endif
+    std::string sp;
+    std::ifstream("/proc/self/comm") >> sp;
+    if(!sp.empty()) return MCENGINE_DATA_DIR + sp;  // fallback to data dir + self
+    return MCENGINE_DATA_DIR PACKAGE_NAME;          // fallback to data dir + package name
+#endif
+}
 }  // namespace
 
 namespace detail {
-void init(std::string_view exe_path) {
+void init() {
+    namespace fs = std::filesystem;
+
+    const fs::path exe_path = resolve_exe_path();
+    if constexpr(Env::cfg(OS::WINDOWS)) {
+        s_dirs.exe = UniString::to_utf8(exe_path.wstring());
+    } else {
+        s_dirs.exe = exe_path.string();
+    }
+
     // fix the working directory in case the user launched us from the wrong folder, so that relative paths resolve
     // next to the executable. only done while MCENGINE_DATA_DIR is at its default, since a packager who changed it
     // clearly wants the executable somewhere else
     if constexpr(!Env::cfg(OS::WASM) && MCENGINE_DATA_DIR[0] == '.' && MCENGINE_DATA_DIR[1] == '/') {
-        namespace fs = std::filesystem;
-        fs::path exe_fspath;
-        if constexpr(Env::cfg(OS::WINDOWS)) {
-            exe_fspath = UniString::to_wide(exe_path);
-        } else {
-            exe_fspath = exe_path;
-        }
-
         bool failed = true;
         std::error_code ec;
-        if(!exe_fspath.empty() && exe_fspath.has_parent_path()) {
-            fs::current_path(exe_fspath.parent_path(), ec);
+        if(exe_path.has_parent_path()) {
+            fs::current_path(exe_path.parent_path(), ec);
             failed = !!ec;
         }
         if(failed) {
-            debugLog("WARNING: failed to set working directory to parent of {}", exe_path);
+            debugLog("WARNING: failed to set working directory to parent of {}", s_dirs.exe);
         }
     }
 
-    const auto sep = exe_path.find_last_of("/\\");
-    s_dirs.exe_dir = sep == std::string_view::npos ? "." : std::string{exe_path.substr(0, sep)};
+    const auto sep = s_dirs.exe.find_last_of("/\\");
+    s_dirs.exe_dir = sep == std::string::npos ? "." : s_dirs.exe.substr(0, sep);
     if(s_dirs.exe_dir.empty()) s_dirs.exe_dir = "/";
 
     // build-time defaults: assets and data both live next to the executable (which is the working directory
-    // after setcwdexe()), or wherever the packager pointed MCENGINE_DATA_DIR/APP_DATA_DIR at
+    // after the chdir above), or wherever the packager pointed MCENGINE_DATA_DIR/APP_DATA_DIR at
     s_dirs.assets = strip_trailing_slashes(MCENGINE_DATA_DIR);
     s_dirs.libs = s_dirs.assets + "/lib";
     s_dirs.data = strip_trailing_slashes(APP_DATA_DIR);
@@ -131,6 +187,7 @@ void init(std::string_view exe_path) {
 }
 }  // namespace detail
 
+const std::string &exe() { return s_dirs.exe; }
 const std::string &exe_dir() { return s_dirs.exe_dir; }
 const std::string &assets() { return s_dirs.assets; }
 const std::string &fonts() { return s_dirs.fonts; }

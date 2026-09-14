@@ -8,8 +8,8 @@
     static_assert(str__[(sizeof(str__) / sizeof((str__)[0]) - 2)] == termchar__, \
                   #str__ " (" str__ ") must end with " #termchar__)
 
-// build-time default for where the bundled assets live (relative to the working directory, which setcwdexe()
-// points at the executable); the actual directories are resolved at startup, see Paths.h
+// build-time default for where the bundled assets live (relative to the working directory, which Paths::detail::init()
+// points at the executable's folder); the actual directories are resolved at startup, see Paths.h
 #ifndef MCENGINE_DATA_DIR
 
 #ifndef MCENGINE_DATA_ROOT

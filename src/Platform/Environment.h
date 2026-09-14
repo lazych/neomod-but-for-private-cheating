@@ -133,10 +133,6 @@ class Environment {
     [[nodiscard]] inline bool isHeadless() const { return m_bHeadless; }
     [[nodiscard]] inline Interop &getEnvInterop() { return *m_interop; }
 
-    // resolved and cached at early startup with argv[0]
-    // contains the full canonical path to the current exe
-    static const std::string &getPathToSelf(const char *argv0 = nullptr);
-
     // i.e. getenv()
     // isUnset is an out variable, if the variable was unset it will be set to true
     [[nodiscard]] static std::string getEnvVariable(std::string_view varToQuery, bool *isUnset = nullptr) noexcept;

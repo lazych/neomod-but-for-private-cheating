@@ -918,7 +918,7 @@ std::string BanchoState::build_login_packet() {
     // Don't dox the user's city
     req.append("0|");
 
-    MD5String osu_path_md5 = crypto::hash::md5(Environment::getPathToSelf());
+    MD5String osu_path_md5 = crypto::hash::md5(Mc::Paths::exe());
 
     // XXX: Should get MAC addresses from network adapters
     // NOTE: Not sure how the MD5 is computed - does it include final "." ?
@@ -1026,7 +1026,7 @@ std::string get_disk_uuid_platform() {
         return retuuid;
     }
 
-    const std::string &exe_path = Environment::getPathToSelf();
+    const std::string &exe_path = Mc::Paths::exe();
 
     // get the device number of the device the current exe is running from
     struct stat st{};
@@ -1061,7 +1061,7 @@ std::string get_disk_uuid_platform() {
 #elif defined(MCENGINE_PLATFORM_WINDOWS)
 
     // get the path to the executable
-    const std::string &exe_path = Environment::getPathToSelf();
+    const std::string &exe_path = Mc::Paths::exe();
     if(exe_path.empty()) {
         return retuuid;
     }
@@ -1141,7 +1141,7 @@ std::string get_disk_uuid_platform() {
     }
     retuuid = uuid;
 #elif defined(MCENGINE_PLATFORM_MACOS)
-    const std::string &exe_path = Environment::getPathToSelf();
+    const std::string &exe_path = Mc::Paths::exe();
 
     struct attrlist attrList{};
     attrList.bitmapcount = ATTR_BIT_MAP_COUNT;

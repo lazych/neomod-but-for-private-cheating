@@ -214,10 +214,9 @@ MAIN_FUNC /* int argc, char *argv[] */
     CrashHandler::init();
 #endif
 
-    // this sets and caches the path in getPathToSelf, so this must be called here
-    const auto &selfpath = Environment::getPathToSelf(argv[0]);
-    // switch the working directory to the executable's folder and resolve the asset/data directory layout
-    Mc::Paths::detail::init(selfpath);
+    // resolve the path to the executable, switch the working directory to its folder and resolve the asset/data
+    // directory layout
+    Mc::Paths::detail::init();
 
     // improve floating point perf in case this isn't already enabled by the compiler
     // -nofpu to disable (debug)

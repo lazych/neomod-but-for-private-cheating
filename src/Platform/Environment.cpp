@@ -54,7 +54,6 @@
 #if defined(MCENGINE_PLATFORM_WINDOWS)
 #include "WinDebloatDefs.h"
 #include <lmcons.h>
-#include <libloaderapi.h>
 #include <winbase.h>
 #include <winnls.h>  // getDefaultLocale
 #elif defined(__APPLE__) || defined(MCENGINE_PLATFORM_LINUX)
@@ -615,57 +614,6 @@ std::vector<std::string> Environment::getLogicalDrives() noexcept {
     }
 
     return drives;
-}
-
-// cached on startup from main.cpp with argv[0] passed, after that argv0 can be null
-const std::string &Environment::getPathToSelf(const char *argv0) {
-    static std::string pathStr{};
-    if(!pathStr.empty()) return pathStr;
-    if constexpr(Env::cfg(OS::WASM)) {
-        pathStr = MCENGINE_DATA_DIR;
-        return pathStr;
-    }
-
-    namespace fs = std::filesystem;
-
-    std::error_code ec;
-    fs::path exe_path{};
-
-    if constexpr(Env::cfg(OS::LINUX)) {
-        exe_path = fs::canonical("/proc/self/exe", ec);
-    } else if constexpr(Env::cfg(OS::WINDOWS)) {
-        exe_path = fs::canonical(UniString::to_wide(std::string_view{argv0}), ec);
-    } else {
-        exe_path = fs::canonical(std::string_view{argv0}, ec);
-    }
-
-    if(!ec && !exe_path.empty())  // canonical path found
-    {
-        if constexpr(Env::cfg(OS::WINDOWS)) {
-            pathStr = UniString::to_utf8(exe_path.wstring());
-        } else {
-            pathStr = exe_path.string();
-        }
-    } else {
-#if defined(MCENGINE_PLATFORM_WINDOWS)  // fallback to GetModuleFileNameW
-        std::array<wchar_t, MAX_PATH + 1> buf{};
-        const size_t length = static_cast<size_t>(GetModuleFileNameW(nullptr, buf.data(), MAX_PATH));
-        std::wstring wPath{buf.data(), length};
-        pathStr = UniString::to_utf8(wPath);
-#else
-#ifndef MCENGINE_PLATFORM_LINUX
-        debugLog("WARNING: unsupported platform");
-#endif
-        std::string sp;
-        std::ifstream("/proc/self/comm") >> sp;
-        if(!sp.empty()) {  // fallback to data dir + self
-            pathStr = MCENGINE_DATA_DIR + sp;
-        } else {  // fallback to data dir + package name
-            pathStr = std::string{MCENGINE_DATA_DIR PACKAGE_NAME};
-        }
-#endif
-    }
-    return pathStr;
 }
 
 std::string Environment::getEnvVariable(std::string_view varToQuery, bool *isUnset) noexcept {

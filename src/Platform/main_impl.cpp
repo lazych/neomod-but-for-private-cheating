@@ -29,6 +29,7 @@
 #include "Parsing.h"
 #include "Touch.h"
 #include "LaunchArgs.h"
+#include "Paths.h"
 
 #ifdef MCENGINE_PLATFORM_WASM
 #include <emscripten/em_js.h>
@@ -1146,8 +1147,9 @@ void SDLMain::restart(std::span<const std::string> restartArgs) {
 
     restartArgsChar.back() = nullptr;
     // use the fully qualified executable path as the first arg
-    // (since if we were launched with a relative path outside the root dir then the relative path points somewhere else after setcwdexe)
-    restartArgsChar.front() = getPathToSelf().c_str();
+    // (since if we were launched with a relative path outside the root dir then the relative path points somewhere else
+    // after Paths::detail::init() changed the working directory)
+    restartArgsChar.front() = Mc::Paths::exe().c_str();
     if(restartArgs.size() > 1) {
         for(int i = 1; const auto &arg : std::span{restartArgs.begin() + 1, restartArgs.end()}) {
             restartArgsChar[i] = arg.c_str();
