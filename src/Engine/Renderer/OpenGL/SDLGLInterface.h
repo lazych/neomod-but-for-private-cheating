@@ -66,13 +66,13 @@ class SDLGLInterface : public GLGraphicsBackend {
     void setVSync(bool vsync) override;
 
     // device info
-    std::string getVendor() override;
-    std::string getModel() override;
-    std::string getVersion() override;
-    int getVRAMRemaining() override;
-    int getVRAMTotal() override;
+    std::string_view getVendor() final;
+    std::string_view getModel() final;
+    std::string_view getVersion() final;
+    int getVRAMRemaining() final;
+    int getVRAMTotal() final;
 
-    [[nodiscard]] bool hasFlippedTextureOrigin() const override { return true; }
+    [[nodiscard]] bool hasFlippedTextureOrigin() const final { return true; }
 
     // 1x1 transparent texture, bound in place of entirely transparent images (which are never uploaded)
     [[nodiscard]] inline GLuint getTransparentTexture() const { return this->transparentTexture; }

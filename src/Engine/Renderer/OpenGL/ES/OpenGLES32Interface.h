@@ -74,7 +74,7 @@ class OpenGLES32Interface final : public SDLGLInterface {
 
     // renderer info
     [[nodiscard]] vec2 getResolution() const final { return m_vResolution; }
-    [[nodiscard]] inline const char *getName() const override { return "OpenGL ES"; }
+    [[nodiscard]] inline std::string_view getName() const override { return "OpenGL ES"; }
 
     // callbacks
     void onResolutionChange(vec2 newResolution) final;

@@ -71,11 +71,11 @@ class NullGraphics : public Graphics {
     void flush() override;
 
     // renderer info
-    const char *getName() const override;
+    std::string_view getName() const override;
     [[nodiscard]] vec2 getResolution() const override;
-    std::string getVendor() override;
-    std::string getModel() override;
-    std::string getVersion() override;
+    std::string_view getVendor() override;
+    std::string_view getModel() override;
+    std::string_view getVersion() override;
     int getVRAMTotal() override;
     int getVRAMRemaining() override;
 

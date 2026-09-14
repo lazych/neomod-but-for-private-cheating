@@ -445,7 +445,7 @@ SDL_AppResult SDLMain::handleEvent(SDL_Event *event) {
                         for(const auto &d : m_vDroppedData) {
                             logString += fmt::format("{}", d);
                         }
-                        logString += ".";
+                        logString += '.';
                         debugLog(logString);
                     }
                 } break;

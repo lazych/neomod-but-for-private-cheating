@@ -230,19 +230,19 @@ void SDLGLInterface::setVSync(bool vsync) {
     }
 }
 
-std::string SDLGLInterface::getVendor() {
+std::string_view SDLGLInterface::getVendor() {
     static const GLubyte *vendor = nullptr;
     if(!vendor) vendor = glGetString(GL_VENDOR);
     return reinterpret_cast<const char *>(vendor);
 }
 
-std::string SDLGLInterface::getModel() {
+std::string_view SDLGLInterface::getModel() {
     static const GLubyte *model = nullptr;
     if(!model) model = glGetString(GL_RENDERER);
     return reinterpret_cast<const char *>(model);
 }
 
-std::string SDLGLInterface::getVersion() {
+std::string_view SDLGLInterface::getVersion() {
     static const GLubyte *version = nullptr;
     if(!version) version = glGetString(GL_VERSION);
     return reinterpret_cast<const char *>(version);

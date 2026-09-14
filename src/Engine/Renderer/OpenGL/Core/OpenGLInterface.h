@@ -75,7 +75,7 @@ class OpenGLInterface final : public SDLGLInterface {
 
     // renderer info
     [[nodiscard]] vec2 getResolution() const final { return this->vResolution; }
-    [[nodiscard]] inline const char *getName() const final { return "OpenGL Legacy"; }
+    [[nodiscard]] inline std::string_view getName() const final { return "OpenGL Legacy"; }
 
     // callbacks
     void onResolutionChange(vec2 newResolution) final;

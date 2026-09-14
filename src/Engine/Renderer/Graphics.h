@@ -217,15 +217,15 @@ class Graphics {
     void takeScreenshot(std::string_view savePath);
 
     // renderer info
-    [[nodiscard]] virtual const char *getName() const = 0;
+    [[nodiscard]] virtual std::string_view getName() const = 0;
 
     // whether this backend samples textures/render targets with a bottom-left origin (OpenGL) instead of the
     // top-left screen-space convention; callers building texcoords or sampling the framebuffer must flip Y when true
     [[nodiscard]] virtual bool hasFlippedTextureOrigin() const { return false; }
     [[nodiscard]] virtual vec2 getResolution() const = 0;
-    virtual std::string getVendor() = 0;
-    virtual std::string getModel() = 0;
-    virtual std::string getVersion() = 0;
+    virtual std::string_view getVendor() = 0;
+    virtual std::string_view getModel() = 0;
+    virtual std::string_view getVersion() = 0;
     virtual int getVRAMTotal() = 0;
     virtual int getVRAMRemaining() = 0;
 

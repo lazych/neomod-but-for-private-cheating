@@ -208,20 +208,18 @@ bool SDLGPUInterface::init() {
     }
 
     // create default shader
-    {
-        m_defaultShader.reset(static_cast<SDLGPUShader *>(createShaderFromSource(
-            std::string(reinterpret_cast<const char *>(VK_default_vsh), static_cast<uSz>(VK_default_vsh_size())),
-            std::string(reinterpret_cast<const char *>(VK_default_fsh), static_cast<uSz>(VK_default_fsh_size())))));
-        m_defaultShader->loadAsync();
-        m_defaultShader->load();
+    m_defaultShader.reset(static_cast<SDLGPUShader *>(createShaderFromSource(
+        std::string(reinterpret_cast<const char *>(VK_default_vsh), static_cast<uSz>(VK_default_vsh_size())),
+        std::string(reinterpret_cast<const char *>(VK_default_fsh), static_cast<uSz>(VK_default_fsh_size())))));
+    m_defaultShader->loadAsync();
+    m_defaultShader->load();
 
-        if(!m_defaultShader->isReady()) {
-            debugLog("SDLGPUInterface: Failed to create default shaders");
-            return false;
-        }
-
-        m_activeShader = m_defaultShader.get();
+    if(!m_defaultShader->isReady()) {
+        debugLog("SDLGPUInterface: Failed to create default shaders");
+        return false;
     }
+
+    m_activeShader = m_defaultShader.get();
 
     // create vertex buffer
     SDL_GPUBufferCreateInfo bufInfo{

@@ -81,11 +81,11 @@ void NullGraphics::flush() {}
 std::vector<u8> NullGraphics::getScreenshot(bool /*withAlpha*/) { return {}; }
 
 // renderer info
-const char *NullGraphics::getName() const { return "NullGraphics"; }
+std::string_view NullGraphics::getName() const { return "NullGraphics"; }
 [[nodiscard]] vec2 NullGraphics::getResolution() const { return {1280.f, 720.f}; }
-std::string NullGraphics::getVendor() { return ""; }
-std::string NullGraphics::getModel() { return ""; }
-std::string NullGraphics::getVersion() { return ""; }
+std::string_view NullGraphics::getVendor() { return ""; }
+std::string_view NullGraphics::getModel() { return ""; }
+std::string_view NullGraphics::getVersion() { return ""; }
 int NullGraphics::getVRAMTotal() { return 0; }
 int NullGraphics::getVRAMRemaining() { return 0; }
 

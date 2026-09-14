@@ -115,10 +115,10 @@ class SDLGPUInterface final : public ModernGraphicsShared {
     // renderer info
     [[nodiscard]] inline vec2 getResolution() const override { return m_viewport.size; }
 
-    [[nodiscard]] inline const char *getName() const override { return m_rendererName.c_str(); }
-    [[nodiscard]] inline std::string getVendor() override { return m_gpuVendor; }
-    [[nodiscard]] inline std::string getModel() override { return m_gpuModel; }
-    [[nodiscard]] inline std::string getVersion() override { return m_gpuDriverVersion; }
+    [[nodiscard]] inline std::string_view getName() const override { return m_rendererName; }
+    [[nodiscard]] inline std::string_view getVendor() override { return m_gpuVendor; }
+    [[nodiscard]] inline std::string_view getModel() override { return m_gpuModel; }
+    [[nodiscard]] inline std::string_view getVersion() override { return m_gpuDriverVersion; }
 
     // TODO? (how)
     [[nodiscard]] inline int getVRAMTotal() override { return 0; }
