@@ -102,15 +102,7 @@ std::vector<ConVar *> ConVarHandler::getConVarByLetter(std::string_view letters)
 }
 
 std::vector<ConVar *> ConVarHandler::getNonSubmittableCvars() const {
-    std::vector<ConVar *> list;
-
-    for(auto *cv : this->vConVarArray) {
-        if(!cv->isProtected() || cv->isDefault()) continue;
-
-        list.push_back(cv);
-    }
-
-    return list;
+    return {};
 }
 
 bool ConVarHandler::areAllCvarsSubmittable() const {

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include <random>
 #include <utility>
 
 #include "Environment.h"
@@ -332,7 +333,7 @@ void BeatmapInterface::onKey(GameplayKeys key_flag, bool down, u64 timestamp) {
     bool hasAnyHitObjects = (likely(!this->hitobjects.empty()));
     bool is_too_early = hasAnyHitObjects && this->iCurMusicPosWithOffsets < this->hitobjects[0]->getClickTime();
     bool should_count_keypress = !is_too_early && !this->bInBreak && !this->bIsInSkippableSection && this->bIsPlaying;
-    bool should_click = (!osu->getModAuto() && !osu->getModRelax()) || !cv::auto_and_relax_block_user_input.getBool();
+    bool should_click = (!osu->getModAuto() && !this->isRelaxActive()) || !cv::auto_and_relax_block_user_input.getBool();
 
     // music position to be interped to next update (in update2())
     Click click{
@@ -1215,6 +1216,11 @@ f32 BeatmapInterface::getPitchMultiplier() const {
 const Skin *BeatmapInterface::getSkin() const { return osu->getSkin(); }
 Skin *BeatmapInterface::getSkinMutable() { return osu->getSkinMutable(); }
 
+bool BeatmapInterface::isRelaxActive() const {
+    return AbstractBeatmapInterface::isRelaxActive() ||
+           (cv::prac_relax.getBool() && !this->is_watching && !BanchoState::spectating);
+}
+
 f32 BeatmapInterface::getRawAR() const {
     if(unlikely(!this->beatmap)) return 5.0f;
 
@@ -1342,8 +1348,8 @@ LiveHitResult BeatmapInterface::addHitResult(HitObject *hitObject, LiveHitResult
             (hit == HIT_SLIDER10)             //
             || (hit == HIT_SLIDER30)          //
             || (hit == HIT_MISS_SLIDERBREAK)  //
-            // Relax: no keypresses, instead we write on every hitresult
-            || (osu->getModRelax() && ((hit == HIT_50)        //
+// Relax: no keypresses, instead we write on every hitresult
+            || (this->isRelaxActive() && ((hit == HIT_50)    //
                                        || (hit == HIT_100)    //
                                        || (hit == HIT_300)    //
                                        || (hit == HIT_MISS))  //
@@ -1748,6 +1754,8 @@ void BeatmapInterface::resetScore() {
     this->current_frame_idx = 0;
     this->iCurMusicPos = 0;
     this->iCurMusicPosWithOffsets = 0;
+
+    this->pracHumanizeReset();
 
     this->fHealth = 1.0;
     this->fHealth2.stop();
@@ -2489,6 +2497,9 @@ void BeatmapInterface::update() {
         this->bAimAssistEngaged = false;
         this->vAimAssistOffset = vec2{0.f};
     }
+
+    // practice relax humanizer (cosmetic synthesized key presses)
+    if(cv::prac_humanize.getBool()) this->updatePracHumanize();
 
     // spinner detection (used by osu!stable drain, and by HUD for not drawing the hiterrorbar)
     if(this->currentHitObject != nullptr) {
@@ -3918,8 +3929,7 @@ FinishedScore BeatmapInterface::saveAndSubmitScore(bool quit) {
     // save local score, but only under certain conditions
     bool isComplete = (num300s + num100s + num50s + numMisses >= numHitObjects);
     bool isZero = (liveScore->getScore() < 1);
-    bool isCheated = (osu->getModAuto() || (osu->getModAutopilot() && osu->getModRelax())) || liveScore->isUnranked() ||
-                     this->is_watching || BanchoState::spectating;
+    bool isCheated = liveScore->isUnranked() || this->is_watching || BanchoState::spectating;
 
     FinishedScore score;
 
@@ -4303,6 +4313,131 @@ void BeatmapInterface::updateAimAssist() {
     }
 
     this->bAimAssistEngaged = true;
+}
+
+void BeatmapInterface::pracHumanizeReset() {
+    if(this->bPracHumanizeK1Down) {
+        this->current_keys &= ~LegacyReplay::K1;
+        ui->getHUD()->animateInputOverlay(GameplayKeys::K1, false);
+        this->bPracHumanizeK1Down = false;
+    }
+    if(this->bPracHumanizeK2Down) {
+        this->current_keys &= ~LegacyReplay::K2;
+        ui->getHUD()->animateInputOverlay(GameplayKeys::K2, false);
+        this->bPracHumanizeK2Down = false;
+    }
+    this->fPracHumanizeK1ReleaseTime = -1.0;
+    this->fPracHumanizeK2ReleaseTime = -1.0;
+    this->iPracHumanizeLastTappedObjectTime = std::numeric_limits<i64>::min();
+    this->iPracHumanizeNextRollTapTime = std::numeric_limits<i64>::min();
+    this->iPracHumanizeKeyStepper = 0;
+}
+
+void BeatmapInterface::pracHumanizeReleaseKey(u8 key) {
+    if(key == LegacyReplay::K1) {
+        if(this->bPracHumanizeK1Down) {
+            this->current_keys &= ~LegacyReplay::K1;
+            ui->getHUD()->animateInputOverlay(GameplayKeys::K1, false);
+            this->bPracHumanizeK1Down = false;
+        }
+        this->fPracHumanizeK1ReleaseTime = -1.0;
+    } else if(key == LegacyReplay::K2) {
+        if(this->bPracHumanizeK2Down) {
+            this->current_keys &= ~LegacyReplay::K2;
+            ui->getHUD()->animateInputOverlay(GameplayKeys::K2, false);
+            this->bPracHumanizeK2Down = false;
+        }
+        this->fPracHumanizeK2ReleaseTime = -1.0;
+    }
+}
+
+void BeatmapInterface::pracHumanizePressKey(u8 key, i32 holdMS) {
+    const f64 releaseTime = (f64)this->iCurMusicPosWithOffsets + (f64)holdMS;
+    if(key == LegacyReplay::K1) {
+        if(!this->bPracHumanizeK1Down) {
+            this->current_keys |= LegacyReplay::K1;
+            ui->getHUD()->animateInputOverlay(GameplayKeys::K1, true);
+            this->bPracHumanizeK1Down = true;
+        }
+        this->fPracHumanizeK1ReleaseTime = releaseTime;
+    } else if(key == LegacyReplay::K2) {
+        if(!this->bPracHumanizeK2Down) {
+            this->current_keys |= LegacyReplay::K2;
+            ui->getHUD()->animateInputOverlay(GameplayKeys::K2, true);
+            this->bPracHumanizeK2Down = true;
+        }
+        this->fPracHumanizeK2ReleaseTime = releaseTime;
+    }
+}
+
+f32 BeatmapInterface::pracHumanizeSampleHoldTime(u8 key) const {
+    const bool isK2 = (key == LegacyReplay::K2);
+    const f32 shape = isK2 ? cv::prac_humanize_k2_shape.getFloat() : cv::prac_humanize_k1_shape.getFloat();
+    const f32 center = isK2 ? cv::prac_humanize_k2_center.getFloat() : cv::prac_humanize_k1_center.getFloat();
+    const f32 spread = isK2 ? cv::prac_humanize_k2_spread.getFloat() : cv::prac_humanize_k1_spread.getFloat();
+    const f32 holdFloor = cv::prac_humanize_hold_floor.getFloat();
+    const f32 holdCeiling = cv::prac_humanize_hold_ceiling.getFloat();
+
+    f32 raw = center;
+    if(spread > 0.0f) {
+        static thread_local std::mt19937 rng{std::random_device{}()};
+        if(shape < 0.5f) {
+            std::normal_distribution<f32> dist(center, spread);
+            raw = dist(rng);
+        } else {
+            std::uniform_real_distribution<f32> dist(center - spread, center + spread);
+            raw = dist(rng);
+        }
+    }
+    return std::clamp(raw, holdFloor, holdCeiling);
+}
+
+void BeatmapInterface::updatePracHumanize() {
+    if(!cv::prac_humanize.getBool() || !this->isRelaxActive()) {
+        this->pracHumanizeReset();
+        return;
+    }
+
+    if(this->is_watching || BanchoState::spectating || this->isPaused() || this->bContinueScheduled ||
+       !this->bIsPlaying) {
+        this->pracHumanizeReset();
+        return;
+    }
+
+    const f64 nowMS = (f64)this->iCurMusicPosWithOffsets;
+
+    // release expired synthetic keys
+    if(this->bPracHumanizeK1Down && nowMS >= this->fPracHumanizeK1ReleaseTime) this->pracHumanizeReleaseKey(LegacyReplay::K1);
+    if(this->bPracHumanizeK2Down && nowMS >= this->fPracHumanizeK2ReleaseTime) this->pracHumanizeReleaseKey(LegacyReplay::K2);
+
+    const HitObject *cur = this->currentHitObject;
+    const bool curIsSliderActive =
+        (cur != nullptr && cur->getType() == HitObjectType::SLIDER && !cur->isFinished() &&
+         (i64)cur->getClickTime() <= (i64)nowMS && (i64)cur->getEndTime() >= (i64)nowMS);
+
+    // while a slider is being tracked, keep re-tapping (like a human streaming/rolling the slider)
+    if(curIsSliderActive) {
+        if(nowMS >= (f64)this->iPracHumanizeNextRollTapTime) {
+            const u8 nextKey =
+                ((this->iPracHumanizeKeyStepper++ & 1) == 0) ? (u8)LegacyReplay::K1 : (u8)LegacyReplay::K2;
+            const f32 hold = this->pracHumanizeSampleHoldTime(nextKey);
+            this->pracHumanizePressKey(nextKey, (i32)hold);
+            this->iPracHumanizeNextRollTapTime =
+                (i64)nowMS + (i64)hold + (i64)cv::prac_humanize_roll_gap.getFloat();
+        }
+        return;
+    }
+
+    // tap just before the upcoming object's hit time (circles and slider heads)
+    const i64 lead = (i64)cv::prac_humanize_tap_lead.getFloat();
+    const i64 nextTime = (i64)this->iNextHitObjectTime;
+    if(nextTime > (i64)nowMS && nextTime != this->iPracHumanizeLastTappedObjectTime && (nextTime - (i64)nowMS) <= lead) {
+        this->iPracHumanizeLastTappedObjectTime = nextTime;
+        const u8 nextKey =
+            ((this->iPracHumanizeKeyStepper++ & 1) == 0) ? (u8)LegacyReplay::K1 : (u8)LegacyReplay::K2;
+        const f32 hold = this->pracHumanizeSampleHoldTime(nextKey);
+        this->pracHumanizePressKey(nextKey, (i32)hold);
+    }
 }
 
 void BeatmapInterface::updatePlayfieldMetrics() {

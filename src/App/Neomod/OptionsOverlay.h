@@ -62,5 +62,5 @@ class OptionsOverlay final : public ScreenBackable {
     void onBack() override;
 
     friend struct OptionsOverlayImpl;
-    StaticPImpl<OptionsOverlayImpl, 1000> pImpl;
+    StaticPImpl<OptionsOverlayImpl, 1200> pImpl;
 };

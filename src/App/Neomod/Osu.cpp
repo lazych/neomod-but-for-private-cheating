@@ -85,12 +85,7 @@ using namespace flags::operators;
 
 Osu *osu{nullptr};
 
-// prevents score submission when/if a protected convar is changed during gameplay
-void Osu::globalOnSetValueProtectedCallback() {
-    if(likely(this->map_iface)) {
-        this->map_iface->is_submittable = false;
-    }
-}
+void Osu::globalOnSetValueProtectedCallback() {}
 
 // prevents getting changed protected convars while in a multi lobby
 bool Osu::globalOnGetValueProtectedCallback(std::string_view cvarname) {
@@ -101,7 +96,7 @@ bool Osu::globalOnGetValueProtectedCallback(std::string_view cvarname) {
     return true;
 }
 
-// prevents changing gameplay convars while playing multi and disables score submission
+// prevents changing gameplay convars while playing multi
 bool Osu::globalOnSetValueGameplayCallback(std::string_view cvarname, CvarEditor setterkind) {
     // Only SERVER can edit GAMEPLAY cvars during multiplayer matches
     if(BanchoState::is_playing_a_multi_map() && setterkind != CvarEditor::SERVER) {
@@ -109,30 +104,10 @@ bool Osu::globalOnSetValueGameplayCallback(std::string_view cvarname, CvarEditor
         return false;
     }
 
-    // Regardless of the editor, changing GAMEPLAY cvars in the middle of a map
-    // will result in an invalid replay. Set it as cheated so the score isn't saved.
-    if(osu->isInPlayMode()) {
-        debugLog("{:s} affects gameplay: won't submit score.", cvarname);
-    }
-    // maybe an impossible scenario for this to be NULL here but just checking anyways
-    if(auto *liveScore = osu->getScore(); !!liveScore) {
-        liveScore->setCheated();
-    }
-
     return true;
 }
 
 bool Osu::globalOnAreAllCvarsSubmittableCallback() {
-    // Also check for non-vanilla mod combinations here while we're at it
-    // We don't want to submit target scores, even though it's allowed in multiplayer
-    if(osu->getModTarget()) return false;
-
-    if(osu->getModEZ() && osu->getModHR()) return false;
-
-    if(!cv::sv_allow_speed_override.getBool()) {
-        f32 speed = cv::speed_override.getFloat();
-        if(speed != -1.f && speed != 0.75 && speed != 1.0 && speed != 1.5) return false;
-    }
     return true;
 }
 
@@ -813,7 +788,6 @@ bool Osu::isInPlayModeAndNotPaused() const {
 
 void Osu::updateMods() {
     this->score->mods = Replay::Mods::from_cvars();
-    this->score->setCheated();
 
     // this is called 3 times in succession with the same mods
     // when enabling a mod selector button and 2 times when disabling them

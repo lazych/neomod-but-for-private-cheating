@@ -426,15 +426,15 @@ CONVAR(mod_doubletime_dummy, false, CLIENT | SKINS | SERVER);
 CONVAR(mod_halftime_dummy, false, CLIENT | SKINS | SERVER);
 
 // Non-vanilla mods
-CONVAR(ar_override, -1.0f, CLIENT | SERVER | GAMEPLAY,
+CONVAR(ar_override, -1.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
        "use this to override between AR 0 and AR 12.5+. active if value is more than or equal to 0.");
-CONVAR(ar_override_lock, false, CLIENT | SERVER | GAMEPLAY,
+CONVAR(ar_override_lock, false, CLIENT | SERVER | PROTECTED | GAMEPLAY,
        "always force constant approach time even through speed changes");
-CONVAR(ar_overridenegative, 0.0f, CLIENT | SERVER | GAMEPLAY,
+CONVAR(ar_overridenegative, 0.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
        "use this to override below AR 0. active if value is less than 0, disabled otherwise. "
        "this override always overrides the other override.");
-CONVAR(autopilot_lenience, 0.75f, CLIENT | SERVER | GAMEPLAY);
-CONVAR(autopilot_snapping_strength, 2.0f, CLIENT | SERVER| GAMEPLAY,
+CONVAR(autopilot_lenience, 0.75f, CLIENT | SERVER | PROTECTED | GAMEPLAY);
+CONVAR(autopilot_snapping_strength, 2.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
        "How many iterations of quadratic interpolation to use, more = snappier, 0 = linear");
 CONVAR(aimassist, false, CLIENT | SERVER,
        "magnetize cursor toward the nearest upcoming/active hitobject");
@@ -448,28 +448,42 @@ CONVAR(aimassist_deadzone, 14.0f, CLIENT | SERVER,
        "screen pixels from a hitobject center at which the assist disengages, prevents center-locking");
 CONVAR(aimassist_minspeed, 18.0f, CLIENT | SERVER,
        "minimum cursor speed (px/s) for the assist to engage; assist only activates while moving");
-CONVAR(cs_override, -1.0f, CLIENT | SERVER | GAMEPLAY,
+CONVAR(prac_relax, false, CLIENT | SERVER,
+       "practice relax: hit circles and sliders automatically when the cursor is on them (not a mod, score submission stays enabled)");
+CONVAR(prac_humanize, false, CLIENT | SERVER,
+       "practice relax humanization: synthesize human-like key presses (cosmetic, does not affect scoring)");
+CONVAR(prac_humanize_k1_shape, 0, CLIENT | SERVER, "practice relax K1 hold shape: 0 = Gaussian, 1 = Uniform");
+CONVAR(prac_humanize_k1_center, 68, CLIENT | SERVER, "practice relax K1 mean key hold duration in ms");
+CONVAR(prac_humanize_k1_spread, 18, CLIENT | SERVER, "practice relax K1 hold jitter spread in ms");
+CONVAR(prac_humanize_k2_shape, 0, CLIENT | SERVER, "practice relax K2 hold shape: 0 = Gaussian, 1 = Uniform");
+CONVAR(prac_humanize_k2_center, 83, CLIENT | SERVER, "practice relax K2 mean key hold duration in ms");
+CONVAR(prac_humanize_k2_spread, 16, CLIENT | SERVER, "practice relax K2 hold jitter spread in ms");
+CONVAR(prac_humanize_hold_floor, 30, CLIENT | SERVER, "minimum synthetic key hold duration in ms");
+CONVAR(prac_humanize_hold_ceiling, 115, CLIENT | SERVER, "maximum synthetic key hold duration in ms");
+CONVAR(prac_humanize_tap_lead, 12, CLIENT | SERVER, "how early (ms) before a hit the synthetic key is pressed");
+CONVAR(prac_humanize_roll_gap, 14, CLIENT | SERVER, "gap (ms) between a synthetic key release and the next press while rolling");
+CONVAR(cs_override, -1.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
        "use this to override between CS 0 and CS 12.1429. active if value is more than or equal to 0.");
-CONVAR(cs_overridenegative, 0.0f, CLIENT | SERVER | GAMEPLAY,
+CONVAR(cs_overridenegative, 0.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
        "use this to override below CS 0. active if value is less than 0, disabled otherwise. "
        "this override always overrides the other override.");
-CONVAR(hp_override, -1.0f, CLIENT | SERVER | GAMEPLAY);
-CONVAR(mod_actual_flashlight, false, CLIENT | SERVER | GAMEPLAY);
-CONVAR(mod_approach_different, false, CLIENT | SERVER | GAMEPLAY,
+CONVAR(hp_override, -1.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY);
+CONVAR(mod_actual_flashlight, false, CLIENT | SERVER | PROTECTED | GAMEPLAY);
+CONVAR(mod_approach_different, false, CLIENT | SERVER | PROTECTED | GAMEPLAY,
        "replicates osu!lazer's \"Approach Different\" mod");
 CONVAR(mod_approach_different_initial_size, 4.0f, CLIENT | SERVER | GAMEPLAY,
        "initial size of the approach circles, relative to hit circles (as a multiplier)");
 CONVAR(mod_approach_different_style, 1, CLIENT | SERVER | GAMEPLAY,
        "0 = linear, 1 = gravity, 2 = InOut1, 3 = InOut2, 4 = Accelerate1, 5 = Accelerate2, 6 = Accelerate3, 7 = "
-       "Decelerate1, 8 = Decelerate2, 9 = Decelerate3");       
-CONVAR(mod_artimewarp, false, CLIENT | SERVER | GAMEPLAY);
+       "Decelerate1, 8 = Decelerate2, 9 = Decelerate3");
+CONVAR(mod_artimewarp, false, CLIENT | SERVER | PROTECTED | GAMEPLAY);
 CONVAR(mod_artimewarp_multiplier, 0.5f, CLIENT | SERVER | GAMEPLAY);
-CONVAR(mod_arwobble, false, CLIENT | SERVER | GAMEPLAY);
-CONVAR(mod_arwobble_interval, 7.0f, CLIENT | SERVER | GAMEPLAY);
-CONVAR(mod_arwobble_strength, 1.0f, CLIENT | SERVER | GAMEPLAY);
-CONVAR(mod_dks, false, CLIENT | SKINS | SERVER | GAMEPLAY);
-CONVAR(mod_endless, false, CLIENT | SERVER | GAMEPLAY);
-CONVAR(mod_fadingcursor, false, CLIENT | SERVER | GAMEPLAY);
+CONVAR(mod_arwobble, false, CLIENT | SERVER | PROTECTED | GAMEPLAY);
+CONVAR(mod_arwobble_interval, 7.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY);
+CONVAR(mod_arwobble_strength, 1.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY);
+CONVAR(mod_dks, false, CLIENT | SKINS | SERVER | PROTECTED | GAMEPLAY);
+CONVAR(mod_endless, false, CLIENT | SERVER | PROTECTED | GAMEPLAY);
+CONVAR(mod_fadingcursor, false, CLIENT | SERVER | PROTECTED | GAMEPLAY);
 CONVAR(mod_fadingcursor_combo, 50.0f, CLIENT | SERVER | GAMEPLAY);
 CONVAR(mod_fposu, false, CLIENT | SERVER | GAMEPLAY);
 CONVAR(mod_fposu_sound_panning, false, CLIENT, "see sound_panning");

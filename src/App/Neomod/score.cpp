@@ -440,10 +440,6 @@ void LiveScore::onScoreChange() {
 
     ui->getRoomScreen()->onClientScoreChange();
 
-    // only used to block local scores for people who think they are very clever by quickly disabling auto just before
-    // the end of a beatmap
-    this->bIsUnranked |= (osu->getModAuto() || (osu->getModAutopilot() && osu->getModRelax()));
-
     if(osu->isInPlayMode()) {
         ui->getHUD()->updateScoreboard(true);
     }

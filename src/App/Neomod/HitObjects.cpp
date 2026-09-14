@@ -891,12 +891,12 @@ void Circle::update(i32 curPosMS, f64 frameTimeSecs) {
         return;
     }
 
-    if(flags::has<ModFlags::Relax>(curIFaceMods)) {
+    if(m_pi->isRelaxActive()) {
         if(curPosMS >= m_clickTimeMS + (i32)cv::relax_offset.getInt() && !m_pi->isPaused() &&
            !m_pi->isContinueScheduled()) {
             const vec2 pos = m_pi->osuCoords2Pixels(m_rawPos);
             const f32 cursorDelta = vec::length(m_pi->getCursorPos() - pos);
-            if((cursorDelta < m_pi->fHitcircleDiameter / 2.0f && (flags::has<ModFlags::Relax>(curIFaceMods)))) {
+            if(cursorDelta < m_pi->fHitcircleDiameter / 2.0f) {
                 LiveHitResult result = m_pi->getHitResult(deltaMS);
 
                 if(result != LiveHitResult::HIT_NULL) {
@@ -1351,7 +1351,7 @@ void Slider::draw2(bool drawApproachCircle, bool drawOnlyApproachCircle) {
     // HACKHACK: this is not entirely correct (due to m_bHeldTillEnd, if held within 300 range but then released, will
     // flash followcircle at the end)
     bool is_holding_click = isClickHeldSlider();
-    is_holding_click |= flags::any<ModFlags::Autoplay | ModFlags::Relax>(curGameplayFlags);
+    is_holding_click |= flags::any<ModFlags::Autoplay>(curGameplayFlags) || m_pi->isRelaxActive();
 
     bool should_draw_followcircle = (m_visible && m_cursorInside && is_holding_click);
     should_draw_followcircle |= (m_finished && m_followCircleAnimationAlpha > 0.0f && m_heldTillEnd);
@@ -1642,12 +1642,12 @@ void Slider::update(i32 curPosMS, f64 frameTimeSecs) {
         } else {
             i32 deltaMS = curPosMS - m_clickTimeMS;
 
-            if((flags::has<ModFlags::Relax>(curIFaceMods))) {
+            if(m_pi->isRelaxActive()) {
                 if(curPosMS >= m_clickTimeMS + (i32)cv::relax_offset.getInt() && !m_pi->isPaused() &&
                    !m_pi->isContinueScheduled()) {
                     const vec2 pos = m_pi->osuCoords2Pixels(curvePointAt(0.0f));
                     const f32 cursorDelta = vec::length(m_pi->getCursorPos() - pos);
-                    if((cursorDelta < m_pi->fHitcircleDiameter / 2.0f && (flags::has<ModFlags::Relax>(curIFaceMods)))) {
+                    if(cursorDelta < m_pi->fHitcircleDiameter / 2.0f) {
                         LiveHitResult result = m_pi->getHitResult(deltaMS);
 
                         if(result != LiveHitResult::HIT_NULL) {
@@ -1691,8 +1691,7 @@ void Slider::update(i32 curPosMS, f64 frameTimeSecs) {
         // because fuck you
         const i32 offsetMS = (i32)cv::slider_end_inside_check_offset.getInt();
         const i32 lenienceHackEndTimeMS = std::max(m_clickTimeMS + m_durationMS / 2, (getEndTime()) - offsetMS);
-        const bool isTrackingCorrectly =
-            (isClickHeldSlider() || (flags::has<ModFlags::Relax>(curIFaceMods))) && m_cursorInside;
+        const bool isTrackingCorrectly = (isClickHeldSlider() || m_pi->isRelaxActive()) && m_cursorInside;
         if(isTrackingCorrectly) {
             if(isTrackingStrictTrackingMod) {
                 m_strictTrackingModLastClickHeldTime = curPosMS;
@@ -1752,7 +1751,7 @@ void Slider::update(i32 curPosMS, f64 frameTimeSecs) {
                 click.finished = true;
                 click.successful = (isClickHeldSlider() && m_cursorInside) ||
                                    (flags::has<ModFlags::Autoplay>(curIFaceMods)) ||
-                                   ((flags::has<ModFlags::Relax>(curIFaceMods)) && m_cursorInside);
+                                   (m_pi->isRelaxActive() && m_cursorInside);
 
                 if(click.type == 0) {
                     onRepeatHit(click);
@@ -1845,7 +1844,7 @@ void Slider::update(i32 curPosMS, f64 frameTimeSecs) {
 
             const bool sliding = m_startFinished && !m_endFinished && m_cursorInside && m_deltaMS <= 0             //
                                  && (isClickHeldSlider() || (flags::has<ModFlags::Autoplay>(curGameplayFlags)) ||  //
-                                     (flags::has<ModFlags::Relax>(curGameplayFlags)))                              //
+                                     m_pi->isRelaxActive())                                                     //
                                  && !m_pf->isPaused() && !m_pf->isWaiting() && m_pf->isPlaying()                   //
                                  && !m_pf->bWasSeekFrame;
 
@@ -2758,7 +2757,7 @@ void Spinner::update(i32 curPosMS, f64 frameTimeSecs) {
         if(deltaMS <= 0) {
             bool isSpinning =
                 m_pi->isClickHeld() ||
-                flags::any<ModFlags::Autoplay | ModFlags::Relax | ModFlags::SpunOut>(m_pi->getMods().flags);
+                flags::any<ModFlags::Autoplay | ModFlags::SpunOut>(m_pi->getMods().flags) || m_pi->isRelaxActive();
 
             m_deltaOverflowMS += frameTimeSecs * 1000.0f;
 

@@ -158,6 +158,16 @@ struct OptionsOverlayImpl final {
     void onNotelockSelectResetClicked();
     void onNotelockSelectResetUpdate();
 
+    void onPracHumanizeK1Select();
+    void onPracHumanizeK1Select2(std::string_view shapeName, int id = -1);
+    void onPracHumanizeK1SelectResetClicked();
+    void onPracHumanizeK1SelectResetUpdate();
+    void onPracHumanizeK2Select();
+    void onPracHumanizeK2Select2(std::string_view shapeName, int id = -1);
+    void onPracHumanizeK2SelectResetClicked();
+    void onPracHumanizeK2SelectResetUpdate();
+    void updatePracHumanizeShapeLabel();
+
     void onCheckboxChange(CBaseUICheckbox *checkbox);
     void onCheckboxChangeWithLayoutUpdate(CBaseUICheckbox *checkbox);
     void onSliderChange(CBaseUISlider *slider);
@@ -287,6 +297,13 @@ struct OptionsOverlayImpl final {
     CBaseUILabel *notelockSelectLabel{nullptr};
     ResetButton *notelockSelectResetButton{nullptr};
 
+    CBaseUIElement *pracHumanizeK1SelectButton{nullptr};
+    CBaseUILabel *pracHumanizeK1SelectLabel{nullptr};
+    ResetButton *pracHumanizeK1SelectResetButton{nullptr};
+    CBaseUIElement *pracHumanizeK2SelectButton{nullptr};
+    CBaseUILabel *pracHumanizeK2SelectLabel{nullptr};
+    ResetButton *pracHumanizeK2SelectResetButton{nullptr};
+
     CBaseUIElement *sectionGeneral{nullptr};
     CBaseUITextbox *serverTextbox{nullptr};
     CBaseUICheckbox *submitScoresCheckbox{nullptr};
@@ -324,6 +341,9 @@ struct OptionsOverlayImpl final {
 
     // notelock
     std::vector<std::string> notelockTypes;
+
+    // practice relax humanize
+    std::vector<std::string> pracHumanizeShapeTypes;
 
     bool updating_layout{false};
 
@@ -823,6 +843,7 @@ OptionsOverlayImpl::OptionsOverlayImpl(OptionsOverlay *parent) : parent(parent) 
         SA::MakeDelegate<&OptionsOverlayImpl::onHighQualitySlidersConVarChange>(this));
 
     this->notelockTypes = {_("None"), _("McOsu"), _("osu!stable (default)"), _("osu!lazer 2020")};
+    this->pracHumanizeShapeTypes = {_("Gaussian"), _("Uniform")};
 
     parent->setPos(-1, 0);
 
@@ -1645,6 +1666,48 @@ OptionsOverlayImpl::OptionsOverlayImpl(OptionsOverlay *parent) : parent(parent) 
         ->setChangeCallback(SA::MakeDelegate<&OptionsOverlayImpl::onSliderChangeIntMS>(this));
     this->addSlider(_("Dead Zone:"), 0.0f, 100.0f, &cv::aimassist_deadzone, 220.0f);
     this->addSlider(_("Min Cursor Speed:"), 0.0f, 200.0f, &cv::aimassist_minspeed, 220.0f);
+    this->addCheckbox(_("Enable Practice Relax"),
+                      _("Automatically hits circles and sliders when the cursor is on them, like the relax mod.\n"
+                        "Not a mod: no mod flag is set and score submission stays enabled."),
+                      &cv::prac_relax);
+    this->addCheckbox(_("Humanize Practice Relax"),
+                      _("Synthesize human-like K1/K2 key presses for practice relax.\n"
+                        "Purely cosmetic: does not affect scoring or gameplay."),
+                      &cv::prac_humanize);
+    this->addLabel("");
+    OptionsElement *k1ShapeSelect = this->addButton(_("K1 Hold Shape"), _("Gaussian"), true, &cv::prac_humanize_k1_shape);
+    ((CBaseUIButton *)k1ShapeSelect->baseElems[0].get())
+        ->setClickCallback(SA::MakeDelegate<&OptionsOverlayImpl::onPracHumanizeK1Select>(this));
+    this->pracHumanizeK1SelectButton = k1ShapeSelect->baseElems[0].get();
+    this->pracHumanizeK1SelectLabel = (CBaseUILabel *)k1ShapeSelect->baseElems[1].get();
+    this->pracHumanizeK1SelectResetButton = k1ShapeSelect->resetButton.get();
+    this->pracHumanizeK1SelectResetButton->setClickCallback(
+        SA::MakeDelegate<&OptionsOverlayImpl::onPracHumanizeK1SelectResetClicked>(this));
+    this->addSlider(_("K1 Center:"), 0.0f, 150.0f, &cv::prac_humanize_k1_center, 220.0f)
+        ->setChangeCallback(SA::MakeDelegate<&OptionsOverlayImpl::onSliderChangeIntMS>(this));
+    this->addSlider(_("K1 Spread:"), 0.0f, 60.0f, &cv::prac_humanize_k1_spread, 220.0f);
+    this->addLabel("");
+    OptionsElement *k2ShapeSelect = this->addButton(_("K2 Hold Shape"), _("Gaussian"), true, &cv::prac_humanize_k2_shape);
+    ((CBaseUIButton *)k2ShapeSelect->baseElems[0].get())
+        ->setClickCallback(SA::MakeDelegate<&OptionsOverlayImpl::onPracHumanizeK2Select>(this));
+    this->pracHumanizeK2SelectButton = k2ShapeSelect->baseElems[0].get();
+    this->pracHumanizeK2SelectLabel = (CBaseUILabel *)k2ShapeSelect->baseElems[1].get();
+    this->pracHumanizeK2SelectResetButton = k2ShapeSelect->resetButton.get();
+    this->pracHumanizeK2SelectResetButton->setClickCallback(
+        SA::MakeDelegate<&OptionsOverlayImpl::onPracHumanizeK2SelectResetClicked>(this));
+    this->addSlider(_("K2 Center:"), 0.0f, 150.0f, &cv::prac_humanize_k2_center, 220.0f)
+        ->setChangeCallback(SA::MakeDelegate<&OptionsOverlayImpl::onSliderChangeIntMS>(this));
+    this->addSlider(_("K2 Spread:"), 0.0f, 60.0f, &cv::prac_humanize_k2_spread, 220.0f);
+    this->addLabel("");
+    this->addSlider(_("Hold Floor:"), 0.0f, 60.0f, &cv::prac_humanize_hold_floor, 220.0f)
+        ->setChangeCallback(SA::MakeDelegate<&OptionsOverlayImpl::onSliderChangeIntMS>(this));
+    this->addSlider(_("Hold Ceiling:"), 60.0f, 200.0f, &cv::prac_humanize_hold_ceiling, 220.0f)
+        ->setChangeCallback(SA::MakeDelegate<&OptionsOverlayImpl::onSliderChangeIntMS>(this));
+    this->addSlider(_("Tap Lead:"), 0.0f, 50.0f, &cv::prac_humanize_tap_lead, 220.0f)
+        ->setChangeCallback(SA::MakeDelegate<&OptionsOverlayImpl::onSliderChangeIntMS>(this));
+    this->addSlider(_("Roll Gap:"), 0.0f, 50.0f, &cv::prac_humanize_roll_gap, 220.0f)
+        ->setChangeCallback(SA::MakeDelegate<&OptionsOverlayImpl::onSliderChangeIntMS>(this));
+    this->addLabel("");
     this->addSpacer();
     this->addSubSection(_("Backgrounds"), "image thumbnail");
     this->addCheckbox(_("Load Background Images (!)"),
@@ -2568,12 +2631,15 @@ void OptionsOverlayImpl::updateLayout() {
 
     this->updateSkinNameLabel();
     this->updateNotelockSelectLabel();
+    this->updatePracHumanizeShapeLabel();
 
     if(this->outputDeviceLabel != nullptr)
         this->outputDeviceLabel->setText(std::string{soundEngine->getOutputDeviceName()});
 
     this->onOutputDeviceResetUpdate();
     this->onNotelockSelectResetUpdate();
+    this->onPracHumanizeK1SelectResetUpdate();
+    this->onPracHumanizeK2SelectResetUpdate();
 
     //************************************************************************************************************************************//
 
@@ -3081,6 +3147,17 @@ void OptionsOverlayImpl::updateNotelockSelectLabel() {
         this->notelockTypes[std::clamp<int>(cv::notelock_type.getInt(), 0, this->notelockTypes.size() - 1)]);
 }
 
+void OptionsOverlayImpl::updatePracHumanizeShapeLabel() {
+    if(this->pracHumanizeK1SelectLabel != nullptr)
+        this->pracHumanizeK1SelectLabel->setText(
+            this->pracHumanizeShapeTypes[std::clamp<int>(cv::prac_humanize_k1_shape.getInt(), 0,
+                                                         this->pracHumanizeShapeTypes.size() - 1)]);
+    if(this->pracHumanizeK2SelectLabel != nullptr)
+        this->pracHumanizeK2SelectLabel->setText(
+            this->pracHumanizeShapeTypes[std::clamp<int>(cv::prac_humanize_k2_shape.getInt(), 0,
+                                                         this->pracHumanizeShapeTypes.size() - 1)]);
+}
+
 void OptionsOverlayImpl::onLanguageSelect() {
     // Just close the language selection menu if it's already open
     if(this->contextMenu->isVisible()) {
@@ -3477,6 +3554,76 @@ void OptionsOverlayImpl::onNotelockSelectResetUpdate() {
     if(this->notelockSelectResetButton != nullptr)
         this->notelockSelectResetButton->setEnabled(cv::notelock_type.getInt() !=
                                                     (int)cv::notelock_type.getDefaultFloat());
+}
+
+void OptionsOverlayImpl::onPracHumanizeK1Select() {
+    this->contextMenu->setPos(this->pracHumanizeK1SelectButton->getPos());
+    this->contextMenu->setRelPos(this->pracHumanizeK1SelectButton->getRelPos());
+    this->contextMenu->begin(this->pracHumanizeK1SelectButton->getSize().x);
+    {
+        for(int i = 0; i < this->pracHumanizeShapeTypes.size(); i++) {
+            CBaseUIButton *button = this->contextMenu->addButton(this->pracHumanizeShapeTypes[i], i);
+            if(i == cv::prac_humanize_k1_shape.getInt()) button->setTextBrightColor(0xff00ff00);
+        }
+    }
+    this->contextMenu->end(false, false);
+    this->contextMenu->setClickCallback(SA::MakeDelegate<&OptionsOverlayImpl::onPracHumanizeK1Select2>(this));
+    this->options->setScrollSizeToContent();
+}
+
+void OptionsOverlayImpl::onPracHumanizeK1Select2(std::string_view /*shapeName*/, int id) {
+    cv::prac_humanize_k1_shape.setValue(id);
+    this->updatePracHumanizeShapeLabel();
+    this->onPracHumanizeK1SelectResetUpdate();
+}
+
+void OptionsOverlayImpl::onPracHumanizeK1SelectResetClicked() {
+    if(this->pracHumanizeShapeTypes.size() > 1 &&
+       (size_t)cv::prac_humanize_k1_shape.getDefaultFloat() < this->pracHumanizeShapeTypes.size())
+        this->onPracHumanizeK1Select2(
+            this->pracHumanizeShapeTypes[(size_t)cv::prac_humanize_k1_shape.getDefaultFloat()],
+            (int)cv::prac_humanize_k1_shape.getDefaultFloat());
+}
+
+void OptionsOverlayImpl::onPracHumanizeK1SelectResetUpdate() {
+    if(this->pracHumanizeK1SelectResetButton != nullptr)
+        this->pracHumanizeK1SelectResetButton->setEnabled(cv::prac_humanize_k1_shape.getInt() !=
+                                                          (int)cv::prac_humanize_k1_shape.getDefaultFloat());
+}
+
+void OptionsOverlayImpl::onPracHumanizeK2Select() {
+    this->contextMenu->setPos(this->pracHumanizeK2SelectButton->getPos());
+    this->contextMenu->setRelPos(this->pracHumanizeK2SelectButton->getRelPos());
+    this->contextMenu->begin(this->pracHumanizeK2SelectButton->getSize().x);
+    {
+        for(int i = 0; i < this->pracHumanizeShapeTypes.size(); i++) {
+            CBaseUIButton *button = this->contextMenu->addButton(this->pracHumanizeShapeTypes[i], i);
+            if(i == cv::prac_humanize_k2_shape.getInt()) button->setTextBrightColor(0xff00ff00);
+        }
+    }
+    this->contextMenu->end(false, false);
+    this->contextMenu->setClickCallback(SA::MakeDelegate<&OptionsOverlayImpl::onPracHumanizeK2Select2>(this));
+    this->options->setScrollSizeToContent();
+}
+
+void OptionsOverlayImpl::onPracHumanizeK2Select2(std::string_view /*shapeName*/, int id) {
+    cv::prac_humanize_k2_shape.setValue(id);
+    this->updatePracHumanizeShapeLabel();
+    this->onPracHumanizeK2SelectResetUpdate();
+}
+
+void OptionsOverlayImpl::onPracHumanizeK2SelectResetClicked() {
+    if(this->pracHumanizeShapeTypes.size() > 1 &&
+       (size_t)cv::prac_humanize_k2_shape.getDefaultFloat() < this->pracHumanizeShapeTypes.size())
+        this->onPracHumanizeK2Select2(
+            this->pracHumanizeShapeTypes[(size_t)cv::prac_humanize_k2_shape.getDefaultFloat()],
+            (int)cv::prac_humanize_k2_shape.getDefaultFloat());
+}
+
+void OptionsOverlayImpl::onPracHumanizeK2SelectResetUpdate() {
+    if(this->pracHumanizeK2SelectResetButton != nullptr)
+        this->pracHumanizeK2SelectResetButton->setEnabled(cv::prac_humanize_k2_shape.getInt() !=
+                                                          (int)cv::prac_humanize_k2_shape.getDefaultFloat());
 }
 
 void OptionsOverlayImpl::onCheckboxChangeWithLayoutUpdate(CBaseUICheckbox *checkbox) {

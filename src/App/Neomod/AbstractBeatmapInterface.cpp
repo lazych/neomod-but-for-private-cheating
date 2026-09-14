@@ -65,6 +65,8 @@ f32 AbstractBeatmapInterface::getConstantOverallDifficultyForSpeedMultiplier() c
 const Replay::Mods &AbstractBeatmapInterface::getMods() const { return osu->getScore()->mods; }
 LegacyFlags AbstractBeatmapInterface::getModsLegacy() const { return osu->getScore()->getModsLegacy(); }
 
+bool AbstractBeatmapInterface::isRelaxActive() const { return flags::has<ModFlags::Relax>(this->getMods().flags); }
+
 i32 AbstractBeatmapInterface::getPVS() const {
     // this is an approximation with generous boundaries, it doesn't need to be exact (just good enough to filter 10000
     // hitobjects down to a few hundred or so) it will be used in both positive and negative directions (previous and

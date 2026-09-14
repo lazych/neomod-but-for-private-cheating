@@ -48,6 +48,7 @@ class AbstractBeatmapInterface {
     [[nodiscard]] virtual const Replay::Mods &getMods() const;  // overridden by SimulatedBeatmapInterface
     [[nodiscard]] virtual LegacyFlags getModsLegacy() const;    // overridden by SimulatedBeatmapInterface
     [[nodiscard]] virtual vec2 getCursorPos() const = 0;
+    [[nodiscard]] virtual bool isRelaxActive() const;
 
     virtual void addScorePoints(int points, bool isSpinner = false) = 0;
     virtual void addSliderBreak() = 0;

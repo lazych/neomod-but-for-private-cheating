@@ -12,6 +12,7 @@
 #include "DatabaseBeatmapTypes.h"
 
 #include <memory>
+#include <limits>
 
 class RenderTarget;
 class Sound;
@@ -231,6 +232,7 @@ class BeatmapInterface final : public AbstractBeatmapInterface {
 
     // generic state
     [[nodiscard]] u8 getKeys() const override { return this->current_keys; }
+    [[nodiscard]] bool isRelaxActive() const override;
     [[nodiscard]] inline bool isPlaying() const override { return this->bIsPlaying; }
     [[nodiscard]] inline bool isPaused() const override { return this->bIsPaused; }
     [[nodiscard]] inline bool isRestartScheduled() const { return this->bIsRestartScheduled; }
@@ -384,6 +386,11 @@ class BeatmapInterface final : public AbstractBeatmapInterface {
 
     void updateAutoCursorPos();
     void updateAimAssist();
+    void updatePracHumanize();
+    void pracHumanizeReset();
+    f32 pracHumanizeSampleHoldTime(u8 key) const;
+    void pracHumanizePressKey(u8 key, i32 holdMS);
+    void pracHumanizeReleaseKey(u8 key);
     void updatePlayfieldMetrics();
     void updateHitobjectMetrics();
     void updateSliderVertexBuffers();
@@ -417,6 +424,15 @@ class BeatmapInterface final : public AbstractBeatmapInterface {
     vec2 vAimAssistLastMouse{0.f};
     bool bAimAssistEngaged{false};
     bool bAimAssistHasLastMouse{false};
+
+    // practice relax humanizer (cosmetic synthesized key presses)
+    bool bPracHumanizeK1Down{false};
+    bool bPracHumanizeK2Down{false};
+    f64 fPracHumanizeK1ReleaseTime{-1.0};  // iCurMusicPosWithOffsets (f64 for sub-ms accuracy) at which K1 is released
+    f64 fPracHumanizeK2ReleaseTime{-1.0};
+    i64 iPracHumanizeLastTappedObjectTime{std::numeric_limits<i64>::min()};
+    i64 iPracHumanizeNextRollTapTime{std::numeric_limits<i64>::min()};
+    u32 iPracHumanizeKeyStepper{0};  // alternates which key gets the next press
 
     // live and precomputed pp/stars
     void resetLiveStarsTasks();
