@@ -23,6 +23,7 @@
 #include <bit>
 #include <cassert>
 #include <memory>
+#include <algorithm>
 
 class SDLGPUShader;
 class SDLGPUVertexArrayObject;
@@ -196,7 +197,8 @@ class SDLGPUInterface final : public ModernGraphicsShared {
     void rebuildPipeline();
     void flushDrawCommands();
     void addRenderPassBoundary();
-    void recordDraw(SDL_GPUBuffer *bakedBuffer, u32 vertexOffset, u32 vertexCount, bool textured);
+    struct Bounds;
+    void recordDraw(SDL_GPUBuffer *bakedBuffer, u32 first, u32 count, bool textured, const Bounds *ndcBounds);
     void resetPendingDraws();
     bool createDepthTexture(u32 width, u32 height);
 
@@ -293,6 +295,26 @@ class SDLGPUInterface final : public ModernGraphicsShared {
     SDL_GPUBuffer *m_vertexBuffer{nullptr};
     SDL_GPUTransferBuffer *m_transferBuffer{nullptr};
 
+    // immediate draws are indexed (absolute u32 into m_vertexBuffer), which keeps the vertex count of strips, fans and
+    // quads as they become triangle lists and lets a draw join an earlier command without moving its vertices: a
+    // command owns a chain of chunks of m_indices that flushDrawCommands() lays out back to back in m_indexBuffer
+    static constexpr uSz MAX_STAGING_INDICES{MAX_STAGING_VERTS * 3};  // strips and fans need 3 indices per vertex
+    static constexpr u32 NO_CHUNK{~0u};
+    struct IndexChunk {
+        u32 first;  // into m_indices
+        u32 count;
+        u32 next;  // into m_indexChunks
+    };
+    std::unique_ptr<u32[]> m_indices;
+    u32 m_indexCount{0};
+    std::vector<IndexChunk> m_indexChunks;
+
+    SDL_GPUBuffer *m_indexBuffer{nullptr};
+    SDL_GPUTransferBuffer *m_indexTransferBuffer{nullptr};
+
+    // how many commands back recordDraw() looks for one that a draw can join
+    static constexpr uSz REORDER_WINDOW{8};
+
     struct Viewport {
         vec2 pos;
         vec2 size;
@@ -307,12 +329,30 @@ class SDLGPUInterface final : public ModernGraphicsShared {
         [[nodiscard]] bool operator==(const Scissor &) const = default;
     };
 
+    // pixel-space footprint of a draw or command, see recordDraw()
+    struct Bounds {
+        vec2 min;
+        vec2 max;
+
+        [[nodiscard]] bool overlaps(const Bounds &o, float pad) const {
+            return min.x <= o.max.x + pad && o.min.x <= max.x + pad && min.y <= o.max.y + pad && o.min.y <= max.y + pad;
+        }
+        void add(const Bounds &o) {
+            min = {std::min(min.x, o.min.x), std::min(min.y, o.min.y)};
+            max = {std::max(max.x, o.max.x), std::max(max.y, o.max.y)};
+        }
+    };
+
     // deferred draw batching
     struct DrawCommand {
-        u32 vertexOffset;
-        u32 vertexCount;
+        // vertex range for baked draws. immediate draws reference their index chunks instead and get their index
+        // range assigned here by flushDrawCommands() once the chunks are laid out
+        u32 first;
+        u32 count;
+        u32 firstChunk;
+        u32 lastChunk;
 
-        SDL_GPUBuffer *bakedBuffer;  // nullptr for immediate (uses shared staging buffer)
+        SDL_GPUBuffer *bakedBuffer;  // nullptr for immediate (uses the shared staging buffers)
 
         SDL_GPUGraphicsPipeline *pipeline;
 
@@ -325,6 +365,9 @@ class SDLGPUInterface final : public ModernGraphicsShared {
         // scissor
         Scissor scissor;
 
+        // union of the draws in the command, only meaningful when hasBounds
+        Bounds bounds;
+
         // uniform snapshot range (into m_uniformSnapshots) this draw needs pushed
         u32 uniformFirst;
         u8 uniformCount;
@@ -334,6 +377,8 @@ class SDLGPUInterface final : public ModernGraphicsShared {
 
         // scissor state
         bool scissorEnabled;
+
+        bool hasBounds;
     };
     std::vector<DrawCommand> m_pendingDraws;
 
@@ -462,6 +507,7 @@ class SDLGPUInterface final : public ModernGraphicsShared {
     int m_statsNumDrawCalls{0};
     int m_statsNumUniformUploads{0};
     int m_statsNumVertexUploads{0};
+    int m_statsNumIndexUploads{0};
     int m_statsNumRenderPasses{0};
 
     // headless mode cache

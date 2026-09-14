@@ -73,8 +73,6 @@ constexpr const size_t MAX_ATLAS_SIZE{4096};
 
 constexpr const char32_t UNKNOWN_CHAR{U'?'};  // ASCII '?'
 
-constexpr const size_t VERTS_PER_VAO{Env::cfg(REND::GLES32 | REND::DX11 | REND::SDLGPU) ? 6 : 4};
-
 // this is still a very conservative amount of memory
 constexpr const size_t CACHED_STRINGS_PER_FONT{Env::cfg(OS::WASM) ? 1024
                                                                   : 4096};  // be more conservative in WASM (32bit)
@@ -95,6 +93,12 @@ FT_Face s_sharedEmojiFace{nullptr};
 
 bool s_sharedFtLibraryInitialized{false};
 bool s_sharedFallbacksInitialized{false};
+
+// glyph vertex layout, decided once in McFont::initSharedResources(): quads where the renderer draws them natively or
+// through an index buffer (GL, SDL_gpu), pre-expanded triangles where the backend would expand every quad at submit
+// time (GLES, DX11)
+size_t s_vertsPerGlyph{4};
+DrawPrimitive s_glyphPrimitive{DrawPrimitive::QUADS};
 
 // face size tracking to avoid redundant setFaceSize calls
 struct LastSizedFTFace {
@@ -177,12 +181,8 @@ struct McFontImpl final {
         [[nodiscard]] const VertexArrayObject *getEmojiVAO() const { return &emojiVAO; }
 
        private:
-        TextVAO VAO{
-            Env::cfg(REND::GLES32 | REND::DX11 | REND::SDLGPU) ? DrawPrimitive::TRIANGLES : DrawPrimitive::QUADS,
-            DrawUsageType::DYNAMIC};
-        TextVAO emojiVAO{
-            Env::cfg(REND::GLES32 | REND::DX11 | REND::SDLGPU) ? DrawPrimitive::TRIANGLES : DrawPrimitive::QUADS,
-            DrawUsageType::DYNAMIC};
+        TextVAO VAO{s_glyphPrimitive, DrawUsageType::DYNAMIC};
+        TextVAO emojiVAO{s_glyphPrimitive, DrawUsageType::DYNAMIC};
         std::vector<const GLYPH_METRICS *> metrics{};
     };
 
@@ -638,11 +638,11 @@ void McFontImpl::drawString(std::string_view text, std::optional<TextFX> effects
                 if(gm->isColor) {
                     buildGlyphGeometry(buffer.getEmojiVerts(), buffer.getEmojiTexcoords(), *gm, advanceX,
                                        emojiStartIndex, expLeft, expRight, expUp, expDown);
-                    emojiStartIndex += VERTS_PER_VAO;
+                    emojiStartIndex += s_vertsPerGlyph;
                 } else {
                     buildGlyphGeometry(buffer.getVerts(), buffer.getTexcoords(), *gm, advanceX, regularStartIndex,
                                        expLeft, expRight, expUp, expDown);
-                    regularStartIndex += VERTS_PER_VAO;
+                    regularStartIndex += s_vertsPerGlyph;
                 }
                 advanceX += gm->advance_x;
             }
@@ -657,8 +657,8 @@ void McFontImpl::drawString(std::string_view text, std::optional<TextFX> effects
         buffer.string = text;
         buffer.cachedExpand = expand;
 
-        const size_t totalVerts = numCodepoints * VERTS_PER_VAO;
-        const size_t maxGlyphs = std::min(numCodepoints, (size_t)((double)totalVerts / (double)VERTS_PER_VAO));
+        const size_t totalVerts = numCodepoints * s_vertsPerGlyph;
+        const size_t maxGlyphs = std::min(numCodepoints, (size_t)((double)totalVerts / (double)s_vertsPerGlyph));
 
         buffer.getMetrics().resize(maxGlyphs);
         buffer.getVAO()->clear();
@@ -1414,8 +1414,8 @@ void McFontImpl::buildGlyphGeometry(std::vector<vec3> &vertsOut, std::vector<vec
     vec2 texTopRight{texX + texSizeX + expandRight * texPerPxX, texY + texSizeY + expandDown * texPerPxY};
     vec2 texBottomRight{texX + texSizeX + expandRight * texPerPxX, texY - expandUp * texPerPxY};
 
-    if constexpr(VERTS_PER_VAO > 4) {
-        // triangles (quads are slower for GL ES because they need to be converted to triangles at submit time)
+    if(s_vertsPerGlyph > 4) {
+        // triangles (quads would be expanded at submit time on gles/dx11)
         // first triangle (bottom-left, top-left, top-right)
         vertsOut[startIndex] = bottomLeft;
         vertsOut[startIndex + 1] = topLeft;
@@ -1465,17 +1465,17 @@ void McFontImpl::buildStringGeometry(VerTexMetCacheEntry &buffer, size_t maxGlyp
 
         const GLYPH_METRICS &gm = getGlyphMetrics(ch);
         if(gm.isColor) {
-            emojiVerts.resize(emojiVerts.size() + VERTS_PER_VAO);
-            emojiTCs.resize(emojiTCs.size() + VERTS_PER_VAO);
+            emojiVerts.resize(emojiVerts.size() + s_vertsPerGlyph);
+            emojiTCs.resize(emojiTCs.size() + s_vertsPerGlyph);
             buildGlyphGeometry(emojiVerts, emojiTCs, gm, advanceX, emojiStartIndex, expandLeft, expandRight, expandUp,
                                expandDown);
-            emojiStartIndex += VERTS_PER_VAO;
+            emojiStartIndex += s_vertsPerGlyph;
         } else {
-            verts.resize(verts.size() + VERTS_PER_VAO);
-            TCs.resize(TCs.size() + VERTS_PER_VAO);
+            verts.resize(verts.size() + s_vertsPerGlyph);
+            TCs.resize(TCs.size() + s_vertsPerGlyph);
             buildGlyphGeometry(verts, TCs, gm, advanceX, regularStartIndex, expandLeft, expandRight, expandUp,
                                expandDown);
-            regularStartIndex += VERTS_PER_VAO;
+            regularStartIndex += s_vertsPerGlyph;
         }
         advanceX += gm.advance_x;
 
@@ -1734,6 +1734,9 @@ void discoverSystemFallbacks() {
 }  // namespace
 
 bool McFont::initSharedResources() {
+    s_vertsPerGlyph = (env->usingDX11() || env->usingGLES()) ? 6 : 4;
+    s_glyphPrimitive = s_vertsPerGlyph == 4 ? DrawPrimitive::QUADS : DrawPrimitive::TRIANGLES;
+
     if(!s_sharedFtLibraryInitialized) {
         if(FT_Init_FreeType(&s_sharedFtLibrary)) {
             engine->showMessageError("Font Error", "FT_Init_FreeType() failed!");

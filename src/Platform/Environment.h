@@ -119,6 +119,11 @@ class Environment {
 #else
     [[nodiscard]] constexpr forceinline bool usingGL() const { return false; }
 #endif
+#ifdef MCENGINE_FEATURE_GLES32
+    [[nodiscard]] inline bool usingGLES() const { return m_renderer == RuntimeRenderer::GLES; }
+#else
+    [[nodiscard]] constexpr forceinline bool usingGLES() const { return false; }
+#endif
 #ifdef MCENGINE_FEATURE_SDLGPU
     [[nodiscard]] inline bool usingSDLGPU() const { return m_renderer == RuntimeRenderer::SDLGPU; }
 #else
