@@ -1632,6 +1632,17 @@ OptionsOverlayImpl::OptionsOverlayImpl(OptionsOverlay *parent) : parent(parent) 
     this->addLabel(_("- osu!lazer 2020: Auto miss previous circle if > time."))->setTextColor(0xff666666);
     this->addLabel("");
     this->addSpacer();
+    this->addSubSection(_("Aim Assist"), "aim assist aimassist practice help magnetic cursor");
+    this->addCheckbox(_("Enable Aim Assist"),
+                      _("Magnetizes the cursor toward nearby upcoming/active hitobjects.\n"
+                        "Practice tool, not a mod. No score submission."),
+                      &cv::aimassist);
+    this->addSlider(_("Assist Strength:"), 0.0f, 1.0f, &cv::aimassist_strength, 220.0f)
+        ->setChangeCallback(SA::MakeDelegate<&OptionsOverlayImpl::onSliderChangePercent>(this));
+    this->addSlider(_("Engage Radius:"), 0.0f, 300.0f, &cv::aimassist_radius, 220.0f);
+    this->addSlider(_("Target Window:"), 0.0f, 1000.0f, &cv::aimassist_window_ms, 220.0f)
+        ->setChangeCallback(SA::MakeDelegate<&OptionsOverlayImpl::onSliderChangeIntMS>(this));
+    this->addSpacer();
     this->addSubSection(_("Backgrounds"), "image thumbnail");
     this->addCheckbox(_("Load Background Images (!)"),
                       _("NOTE: Disabling this will disable ALL beatmap images everywhere!"),

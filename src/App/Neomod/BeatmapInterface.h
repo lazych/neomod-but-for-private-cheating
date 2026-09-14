@@ -383,6 +383,7 @@ class BeatmapInterface final : public AbstractBeatmapInterface {
     void drawContinue();
 
     void updateAutoCursorPos();
+    void updateAimAssist();
     void updatePlayfieldMetrics();
     void updateHitobjectMetrics();
     void updateSliderVertexBuffers();
@@ -410,6 +411,10 @@ class BeatmapInterface final : public AbstractBeatmapInterface {
     // auto
     vec2 vAutoCursorPos{0.f};
     int iAutoCursorDanceIndex;
+
+    // aim assist
+    vec2 vAimAssistTarget{0.f};
+    bool bAimAssistActive{false};
 
     // live and precomputed pp/stars
     void resetLiveStarsTasks();

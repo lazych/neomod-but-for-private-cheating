@@ -2481,6 +2481,14 @@ void BeatmapInterface::update() {
     // update auto (after having updated the hitobjects)
     if(osu->getModAuto() || osu->getModAutopilot()) this->updateAutoCursorPos();
 
+    // update aim assist (after having updated the hitobjects)
+    if(cv::aimassist.getBool() && !this->is_watching && !BanchoState::spectating && !osu->getModAuto() &&
+       !osu->getModAutopilot()) {
+        this->updateAimAssist();
+    } else {
+        this->bAimAssistActive = false;
+    }
+
     // spinner detection (used by osu!stable drain, and by HUD for not drawing the hiterrorbar)
     if(this->currentHitObject != nullptr) {
         this->bIsSpinnerActive = this->currentHitObject->getType() == HitObjectType::SPINNER;
@@ -3797,6 +3805,10 @@ vec2 BeatmapInterface::getCursorPos() const {
         return this->vAutoCursorPos;
     } else {
         vec2 pos = this->getMousePos();
+        if(cv::aimassist.getBool() && this->bAimAssistActive && !this->bIsPaused && !this->is_watching) {
+            const f32 strength = std::clamp<f32>(cv::aimassist_strength.getFloat(), 0.0f, 1.0f);
+            pos += (this->vAimAssistTarget - pos) * strength;
+        }
         if(cv::mod_shirone.getBool() && osu->getScore()->getCombo() > 0) {
             return pos + vec2(std::sin((this->iCurMusicPos / 20.0f) * 1.15f) *
                                   ((f32)osu->getScore()->getCombo() / cv::mod_shirone_combo.getFloat()),
@@ -4182,6 +4194,48 @@ void BeatmapInterface::updateAutoCursorPos() {
             this->vAutoCursorPos =
                 prevPos + (nextPos - prevPos) * 0.5f + vec2(fancyAutoCursorPos.x, fancyAutoCursorPos.y);
         }
+    }
+}
+
+void BeatmapInterface::updateAimAssist() {
+    this->bAimAssistActive = false;
+
+    if(!this->bIsPlaying && !this->bIsPaused) return;
+    if(unlikely(this->hitobjects.empty())) return;
+
+    const i32 curMusicPos = this->iCurMusicPosWithOffsets;
+    const f32 radius = std::max(cv::aimassist_radius.getFloat(), 0.0f);
+    const i32 windowMS = std::max(cv::aimassist_window_ms.getInt(), 0);
+    const vec2 cursor = this->getMousePos();
+    const f32 radiusSq = radius * radius;
+
+    vec2 bestTarget{0.f};
+    f32 bestDistSq = radiusSq;
+
+    for(const auto &obj : this->hitobjects) {
+        HitObject *o = obj.get();
+
+        if(o->isFinished()) continue;
+
+        const i32 clickTime = o->getClickTime();
+        const i32 endTime = o->getEndTime();
+
+        if(curMusicPos > endTime) continue;               // already over
+        if(curMusicPos < clickTime - windowMS) continue;  // too far in the future
+
+        const vec2 p = this->osuCoords2Pixels(o->getRawPosAt(curMusicPos));
+        const f32 dx = p.x - cursor.x;
+        const f32 dy = p.y - cursor.y;
+        const f32 distanceSq = dx * dx + dy * dy;
+        if(distanceSq < bestDistSq) {
+            bestDistSq = distanceSq;
+            bestTarget = p;
+        }
+    }
+
+    if(bestDistSq < radiusSq) {
+        this->vAimAssistTarget = bestTarget;
+        this->bAimAssistActive = true;
     }
 }
 
