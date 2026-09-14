@@ -115,12 +115,12 @@ class DirectX11Interface final : public ModernGraphicsShared {
     void flush() override;
 
     // renderer info
-    [[nodiscard]] inline const char *getName() const override { return "DirectX11"; }
+    [[nodiscard]] inline std::string_view getName() const override { return "DirectX11"; }
     [[nodiscard]] vec2 getResolution() const override { return this->vResolution; }
-    std::string getVendor() override;
-    std::string getModel() override;
-    std::string getVersion() override;
-    int getVRAMTotal() override;
+    std::string_view getVendor() override { return this->gpuVendor; }
+    std::string_view getModel() override { return this->gpuModel; }
+    std::string_view getVersion() override { return this->gpuDriverVersion; }
+    int getVRAMTotal() override { return this->vramTotal; }
     int getVRAMRemaining() override;
 
     // device settings
@@ -249,6 +249,12 @@ class DirectX11Interface final : public ModernGraphicsShared {
    private:
     // renderer
     vec2 vResolution{};  // to be initialized after swapchain creation
+
+    std::string gpuVendor{"?"};
+    std::string gpuModel{"?"};
+    std::string gpuDriverVersion{"?"};
+
+    int vramTotal{0};
 
     // device context
     HWND hwnd{};

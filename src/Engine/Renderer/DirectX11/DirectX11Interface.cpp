@@ -268,6 +268,16 @@ bool DirectX11Interface::init() {
 
     this->minimizeListener = std::make_unique<OcclusionListener>();
 
+    // cache some gpu/driver info
+    if(DXGI_ADAPTER_DESC desc; SUCCEEDED(this->dxgiAdapter->GetDesc(&desc))) {
+        this->gpuVendor = fmt::format("0x{:x}", desc.VendorId);
+        this->gpuModel = UniString::to_utf8(std::wstring_view{desc.Description, 128});
+        this->gpuDriverVersion = fmt::format("0x{:x}/{:x}/{:x}", desc.DeviceId, desc.SubSysId, desc.Revision);
+        // NOTE: this value is affected by 32-bit limits, meaning it will cap out at ~3071 MB (or ~3072 MB depending on rounding), which makes sense since we
+        // can't address more video memory in a 32-bit process anyway (TODO: not relevant for 64bit builds...)
+        this->vramTotal = (desc.DedicatedVideoMemory / 1024);  // (from bytes to kb)
+    }
+
     // NOTE: force build swapchain rendertarget
     this->onResolutionChange(env->getWindowSize());
 
@@ -1001,45 +1011,6 @@ std::vector<u8> DirectX11Interface::getScreenshot(bool withAlpha) {
         }
     }
     return result;
-}
-
-std::string DirectX11Interface::getVendor() {
-    DXGI_ADAPTER_DESC desc;
-    if(this->dxgiAdapter && SUCCEEDED(this->dxgiAdapter->GetDesc(&desc))) {
-        return fmt::format("0x{:x}", desc.VendorId);
-    }
-
-    return "<UNKNOWN>";
-}
-
-std::string DirectX11Interface::getModel() {
-    DXGI_ADAPTER_DESC desc;
-    if(this->dxgiAdapter && SUCCEEDED(this->dxgiAdapter->GetDesc(&desc))) {
-        const std::wstring description = std::wstring(desc.Description, 128);
-        return UniString::to_utf8(description);
-    }
-
-    return "<UNKNOWN>";
-}
-
-std::string DirectX11Interface::getVersion() {
-    DXGI_ADAPTER_DESC desc;
-    if(this->dxgiAdapter && SUCCEEDED(this->dxgiAdapter->GetDesc(&desc))) {
-        return fmt::format("0x{:x}/{:x}/{:x}", desc.DeviceId, desc.SubSysId, desc.Revision);
-    }
-
-    return "<UNKNOWN>";
-}
-
-int DirectX11Interface::getVRAMTotal() {
-    DXGI_ADAPTER_DESC desc;
-    if(this->dxgiAdapter && SUCCEEDED(this->dxgiAdapter->GetDesc(&desc))) {
-        // NOTE: this value is affected by 32-bit limits, meaning it will cap out at ~3071 MB (or ~3072 MB depending on rounding), which makes sense since we
-        // can't address more video memory in a 32-bit process anyway
-        return (desc.DedicatedVideoMemory / 1024);  // (from bytes to kb)
-    }
-
-    return -1;
 }
 
 int DirectX11Interface::getVRAMRemaining() {
