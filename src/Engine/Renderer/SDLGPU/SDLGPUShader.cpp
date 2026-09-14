@@ -213,7 +213,10 @@ void SDLGPUShader::writeUniform(std::string_view name, [[maybe_unused]] UniformT
         }
     }
 
-    std::memcpy(uniformVarDataPtr, data, std::min(dataSize, varSize));
+    const u32 size = std::min(dataSize, varSize);
+    if(std::memcmp(uniformVarDataPtr, data, size) == 0) return;
+    std::memcpy(uniformVarDataPtr, data, size);
+    m_uniformGeneration++;
 }
 
 // shader pack parsing

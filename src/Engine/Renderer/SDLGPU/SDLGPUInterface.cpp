@@ -68,10 +68,12 @@ SDLGPUInterface::~SDLGPUInterface() {
         for(auto &[key, pipeline] : m_pipelineCache) SDL_ReleaseGPUGraphicsPipeline(m_device, pipeline);
         m_pipelineCache.clear();
         if(m_vertexBuffer) SDL_ReleaseGPUBuffer(m_device, m_vertexBuffer);
+        if(m_stagingMapped) SDL_UnmapGPUTransferBuffer(m_device, m_transferBuffer);
         if(m_transferBuffer) SDL_ReleaseGPUTransferBuffer(m_device, m_transferBuffer);
         if(m_depthTexture) SDL_ReleaseGPUTexture(m_device, m_depthTexture);
         if(m_backbuffer) SDL_ReleaseGPUTexture(m_device, m_backbuffer);
         if(m_dummySampler) SDL_ReleaseGPUSampler(m_device, m_dummySampler);
+        if(m_whiteTexture) SDL_ReleaseGPUTexture(m_device, m_whiteTexture);
         if(m_dummyTexture) SDL_ReleaseGPUTexture(m_device, m_dummyTexture);
         m_smoothClipShader.reset();
         m_defaultShader.reset();
@@ -245,7 +247,8 @@ bool SDLGPUInterface::init() {
         return false;
     }
 
-    // create 1x1 transparent black dummy texture (SDL_gpu requires all sampler bindings to be satisfied even when unused)
+    // create the 1x1 transparent black and white textures (SDL_gpu requires all sampler bindings to be satisfied even
+    // when unused, and untextured immediate draws sample the white one)
     {
         SDL_GPUTextureCreateInfo texInfo{
             .type = SDL_GPU_TEXTURETYPE_2D,
@@ -259,23 +262,23 @@ bool SDLGPUInterface::init() {
             .props = 0,
         };
         m_dummyTexture = SDL_CreateGPUTexture(m_device, &texInfo);
+        m_whiteTexture = SDL_CreateGPUTexture(m_device, &texInfo);
 
         SDL_GPUSamplerCreateInfo sampInfo{};
         sampInfo.min_filter = SDL_GPU_FILTER_NEAREST;
         sampInfo.mag_filter = SDL_GPU_FILTER_NEAREST;
         m_dummySampler = SDL_CreateGPUSampler(m_device, &sampInfo);
 
-        if(m_dummyTexture && m_dummySampler) {
-            // upload 1x1 transparent black pixel
+        if(m_dummyTexture && m_whiteTexture && m_dummySampler) {
+            const u32 pixels[2] = {0x00000000, 0xffffffff};
             SDL_GPUTransferBufferCreateInfo dummyTbInfo{
                 .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-                .size = 4,
+                .size = sizeof(pixels),
                 .props = 0,
             };
             if(auto *tb = SDL_CreateGPUTransferBuffer(m_device, &dummyTbInfo)) {
                 if(void *mapped = SDL_MapGPUTransferBuffer(m_device, tb, false)) {
-                    const u32 noColor = 0x00000000;
-                    std::memcpy(mapped, &noColor, 4);
+                    std::memcpy(mapped, pixels, sizeof(pixels));
                     SDL_UnmapGPUTransferBuffer(m_device, tb);
                 }
 
@@ -283,14 +286,17 @@ bool SDLGPUInterface::init() {
                     if(auto *cp = SDL_BeginGPUCopyPass(cmd)) {
                         SDL_GPUTextureTransferInfo src{};
                         src.transfer_buffer = tb;
-                        src.offset = 0;
 
                         SDL_GPUTextureRegion dst{};
-                        dst.texture = m_dummyTexture;
                         dst.w = 1;
                         dst.h = 1;
                         dst.d = 1;
 
+                        src.offset = 0;
+                        dst.texture = m_dummyTexture;
+                        SDL_UploadToGPUTexture(cp, &src, &dst, false);
+                        src.offset = sizeof(pixels[0]);
+                        dst.texture = m_whiteTexture;
                         SDL_UploadToGPUTexture(cp, &src, &dst, false);
                         SDL_EndGPUCopyPass(cp);
                     }
@@ -345,14 +351,14 @@ void SDLGPUInterface::createPipeline() {
         return;
     }
 
-    // vertex layout: pos(vec3) + col(vec4) + tex(vec2) = 9 floats = 36 bytes
+    // vertex layout: pos(vec3) + col(rgba8) + tex(vec2) = 24 bytes
     SDL_GPUVertexAttribute vertexAttributes[3] = {
         {.location = 0, .buffer_slot = 0, .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, .offset = 0},
-        {.location = 1, .buffer_slot = 0, .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4, .offset = sizeof(vec3)},
+        {.location = 1, .buffer_slot = 0, .format = SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM, .offset = sizeof(vec3)},
         {.location = 2,
          .buffer_slot = 0,
          .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-         .offset = sizeof(vec3) + sizeof(vec4)},
+         .offset = sizeof(vec3) + sizeof(SDLGPUSimpleVertex::col)},
     };
 
     SDL_GPUVertexBufferDescription vertexBufferDesc{
@@ -565,8 +571,7 @@ void SDLGPUInterface::beginScene() {
     m_curRTState.clearColor = 0xff000000;
 
     // clear deferred draw state
-    m_pendingDraws.clear();
-    m_stagingVertices.clear();
+    resetPendingDraws();
     m_renderPassBoundaries.clear();
 
     // clear bound texture/sampler so stale pointers from the previous frame
@@ -592,13 +597,16 @@ void SDLGPUInterface::beginScene() {
     const int numDrawCallsPrevFrame = m_statsNumDrawCalls;
     const int numShaderUniformUploadsPrevFrame = m_statsNumUniformUploads;
     const int numVertexUploadsPrevFrame = m_statsNumVertexUploads;
+    const int numRenderPassesPrevFrame = m_statsNumRenderPasses;
     m_statsNumDrawCalls = 0;
     m_statsNumUniformUploads = 0;
     m_statsNumVertexUploads = 0;
+    m_statsNumRenderPasses = 0;
     if(vprof && vprof->isEnabled()) {
         vprof->addInfoBladeEngineTextLine(fmt::format("Draw Calls: {}", numDrawCallsPrevFrame));
         vprof->addInfoBladeEngineTextLine(fmt::format("Uniform Uploads: {}", numShaderUniformUploadsPrevFrame));
         vprof->addInfoBladeEngineTextLine(fmt::format("Vertex Uploads: {}", numVertexUploadsPrevFrame));
+        vprof->addInfoBladeEngineTextLine(fmt::format("Render Passes: {}", numRenderPassesPrevFrame));
     }
 }
 
@@ -654,17 +662,9 @@ void SDLGPUInterface::clearDepthBuffer() {
 
 // color
 
-void SDLGPUInterface::setColor(Color color) {
-    if(m_data->color == color) return;
-    m_data->color = color;
-    m_colUniformDirty = true;  // pushed lazily by syncColUniform() when a draw actually reads it
-}
+void SDLGPUInterface::setColor(Color color) { m_data->color = color; }
 
-void SDLGPUInterface::setAlpha(float alpha) {
-    if(m_data->color.a == Colors::to_byte(alpha)) return;
-    m_data->color.setA(alpha);
-    m_colUniformDirty = true;
-}
+void SDLGPUInterface::setAlpha(float alpha) { m_data->color.setA(alpha); }
 
 // 2d resource drawing
 
@@ -770,13 +770,11 @@ void SDLGPUInterface::drawVAO(VertexArrayObject *vao) {
 
     this->updateTransform();
 
+    const bool defaultShader = (m_activeShader == m_defaultShader.get());
+
     // if baked, record draw through the deferred system (vao->draw() calls recordBakedDraw)
     if(vao->isReady()) {
-        const bool textured = vao->hasTexcoords();
-        const bool colorless = !vao->hasColors();
-        this->setTexturing(textured);  // like the immediate path below (misc.x would be stale otherwise)
-        this->setDrawColorless(colorless);
-        if(textured || colorless) this->syncColUniform();
+        if(defaultShader) applyDefaultFragState(vao->hasTexcoords(), !vao->hasColors(), m_data->color);
         vao->draw();
         return;
     }
@@ -788,124 +786,138 @@ void SDLGPUInterface::drawVAO(VertexArrayObject *vao) {
 
     if(vertices.size() < 2) return;
 
-    // SDL_gpu doesn't support quads or triangle fans; must convert to triangles
+    // SDL_gpu doesn't support quads or triangle fans, and triangle strips are converted as well so that all triangle
+    // draws share one list pipeline. one unit is one output primitive (or one vertex for the passthrough types)
     const DrawPrimitive srcPrimitive = vao->getPrimitive();
-    if(srcPrimitive == DrawPrimitive::QUADS && vertices.size() <= 3) return;
-    if(srcPrimitive == DrawPrimitive::TRIANGLE_FAN && vertices.size() <= 2) return;
-
-    const bool hasTexcoords0 = !texcoords.empty();
-
-    // convert per-vertex colors from packed Color to vec4.
-    // when textured with no per-vertex colors, use white (col uniform provides m_color).
-    // when non-textured with no per-vertex colors, the default shader reads the col uniform (misc.z is set);
-    // m_color is still written into the vertices for custom shaders which read fragColor directly.
-    static std::vector<vec4> colors;
-    if(vcolors.empty()) {
-        const vec4 c = hasTexcoords0
-                           ? vec4{1.f, 1.f, 1.f, 1.f}
-                           : vec4{m_data->color.Rf(), m_data->color.Gf(), m_data->color.Bf(), m_data->color.Af()};
-        colors.assign(vertices.size(), c);
-    } else {
-        const uSz n = std::min(vcolors.size(), vertices.size());
-        colors.resize(vertices.size());
-        for(uSz i = 0; i < n; i++) {
-            colors[i] = {vcolors[i].Rf(), vcolors[i].Gf(), vcolors[i].Bf(), vcolors[i].Af()};
-        }
-        if(n < vertices.size()) {
-            // "programmer error", fewer colors were provided than vertices, but handle it anyways (backfill with the last color) to not crash
-            std::fill(colors.begin() + (sSz)n, colors.end(), colors[n - 1]);
-        }
+    DrawPrimitive outPrimitive = srcPrimitive;
+    uSz numUnits, srcStep, outStep;  // NOLINT(cppcoreguidelines-init-variables)
+    // clang-format off
+    switch(srcPrimitive) {
+        using enum DrawPrimitive;
+        case QUADS:          outPrimitive = TRIANGLES; numUnits = vertices.size() / 4; srcStep = 4; outStep = 6; break;
+        case TRIANGLE_FAN:
+        case TRIANGLE_STRIP: outPrimitive = TRIANGLES; numUnits = vertices.size() - 2; srcStep = 1; outStep = 3; break;
+        case TRIANGLES:      numUnits = vertices.size() / 3; srcStep = 3; outStep = 3; break;
+        case LINES:          numUnits = vertices.size() / 2; srcStep = 2; outStep = 2; break;
+        // line strips/loops stay native, a list would rasterize the shared vertices twice
+        default:             numUnits = vertices.size();     srcStep = 1; outStep = 1; break;
     }
-    static constexpr vec2 zeroTex{};
-    const vec2 *texData = hasTexcoords0 ? texcoords.data() : &zeroTex;
-    const uSz maxTexIndex = hasTexcoords0 ? texcoords.size() - 1 : 0;
+    // clang-format on
+    if(numUnits == 0) return;
 
-    // set primitive type and texturing
-    this->setTexturing(hasTexcoords0);
-    this->setDrawColorless(vcolors.empty());
-    if(hasTexcoords0 || vcolors.empty()) this->syncColUniform();
+    const bool hasTexcoords = !texcoords.empty();
+    const bool hasVColors = !vcolors.empty();
 
-    if(const SDLGPUPrimitiveType gpuPrimitive = primitiveToSDLGPUPrimitive(srcPrimitive);
+    if(const SDLGPUPrimitiveType gpuPrimitive = primitiveToSDLGPUPrimitive(outPrimitive);
        gpuPrimitive != m_currentPrimitiveType) {
         m_currentPrimitiveType = gpuPrimitive;
         m_isPipelineDirty = true;
     }
     rebuildPipeline();
 
-    // batch parameters for primitive conversion
-
-    // srcStep = source vertices consumed per primitive unit, outStep = output vertices emitted per unit, srcIdx = current source vertex index
-    // clang-format off
-    uSz _srcStepTmp, _outStepTmp, srcIdx; // NOLINT(cppcoreguidelines-init-variables)
-    switch(srcPrimitive) {
-        using enum DrawPrimitive;
-        case QUADS:        _srcStepTmp = 4; _outStepTmp = 6; srcIdx = 0; break;
-        case TRIANGLE_FAN: _srcStepTmp = 1; _outStepTmp = 3; srcIdx = 2; break;
-        case TRIANGLES:    _srcStepTmp = 3; _outStepTmp = 3; srcIdx = 0; break;
-        case LINES:        _srcStepTmp = 2; _outStepTmp = 2; srcIdx = 0; break;
-        // not worth trying to split strips, points, etc.
-        default:           _srcStepTmp = 1; _outStepTmp = 1; srcIdx = 0;
+    // with the default shader, immediate draws keep the fragment uniforms constant (always sampling, white col) and
+    // carry m_color in the vertices instead: textured draws multiply it into the vertex color, untextured draws sample
+    // m_whiteTexture. positions are pre-transformed on the cpu for 2d (affine) transforms so the mvp uniform can stay
+    // the identity, which is what lets consecutive draws merge in recordDraw(). custom shaders keep the legacy rules:
+    // white vertex color when textured, m_color when not, vertex colors as-is, per-draw mvp
+    const float *mp = m_data->MP.get();  // column-major
+    const bool preTransform = defaultShader && mp[3] == 0.f && mp[7] == 0.f && mp[11] == 0.f && mp[15] == 1.f;
+    Color constColor = hasTexcoords ? Color{0xffffffff} : m_data->color;
+    Color colorMul{0xffffffff};
+    if(defaultShader) {
+        applyDefaultFragState(true, false, 0xffffffff);
+        constColor = m_data->color;
+        if(hasTexcoords) colorMul = m_data->color;
+        if(preTransform) {
+            if(!m_defaultMVPIsIdentity) {
+                m_defaultShader->setMVP(Matrix4{});
+                m_defaultMVPIsIdentity = true;
+            }
+        } else {
+            m_defaultShader->setMVP(m_data->MP);
+            m_defaultMVPIsIdentity = false;
+        }
+    } else {
+        m_activeShader->setMVP(m_data->MP);
     }
-    // clang-format on
+    const auto packedConst = SDLGPUSimpleVertex::packColor(constColor);
+    // fewer colors/texcoords than vertices is a "programmer error", but clamp instead of crashing
+    const uSz maxColorIdx = hasVColors ? vcolors.size() - 1 : 0;
+    const uSz maxTexIdx = hasTexcoords ? texcoords.size() - 1 : 0;
 
-    const uSz srcStep{_srcStepTmp}, outStep{_outStepTmp};
+    // called from every primitive conversion site, so force the inlining the optimizer stops doing on its own
+    SDLGPUSimpleVertex *dst = nullptr;
+    const auto emit = [&] [[gnu::always_inline]] (uSz vi) {
+        vec3 p = vertices[vi];
+        if(preTransform) {
+            p = {mp[0] * p.x + mp[4] * p.y + mp[8] * p.z + mp[12], mp[1] * p.x + mp[5] * p.y + mp[9] * p.z + mp[13],
+                 mp[2] * p.x + mp[6] * p.y + mp[10] * p.z + mp[14]};
+        }
+        dst->pos = p;
+        dst->col =
+            hasVColors ? SDLGPUSimpleVertex::packColorMul(vcolors[std::min(vi, maxColorIdx)], colorMul) : packedConst;
+        dst->tex = hasTexcoords ? texcoords[std::min(vi, maxTexIdx)] : vec2{};
+        ++dst;
+    };
 
-    // append vertices to staging buffer, converting primitives to triangles as needed.
+    // write into the mapped staging buffer, converting primitives as needed.
     // performing more than 1 loop here should be rare in realistic scenarios,
     // but still worth handling out of precaution
-    while(srcIdx < vertices.size()) {
-        if(m_stagingVertices.size() + outStep > MAX_STAGING_VERTS) {
+    uSz unitIdx = 0;
+    while(unitIdx < numUnits) {
+        if(m_stagingCount + outStep > MAX_STAGING_VERTS) {
             flushDrawCommands();
             addRenderPassBoundary();
         }
-
-        const uSz available = MAX_STAGING_VERTS - m_stagingVertices.size();
-        const uSz batchUnits = std::min(available / outStep, (vertices.size() - srcIdx) / srcStep);
-        if(batchUnits == 0) break;
-
-        const uSz batchOutVerts = batchUnits * outStep;
-        const uSz batchSrcEnd = srcIdx + batchUnits * srcStep;
-
-        const u32 offset = (u32)m_stagingVertices.size();
-        m_stagingVertices.reserve(offset + batchOutVerts);
-
-        if(srcPrimitive == DrawPrimitive::QUADS) {
-            static constexpr std::array<int, 6> viAdd{0, 1, 2, 0, 2, 3};
-            for(; srcIdx < batchSrcEnd; srcIdx += 4) {
-                for(uSz j = 0; j < 6; ++j) {
-                    const uSz vi = srcIdx + viAdd[j];
-                    m_stagingVertices.emplace_back(         //
-                        vertices[vi],                       //
-                        colors[vi],                         //
-                        texData[std::min(vi, maxTexIndex)]  //
-                    );
-                }
-            }
-        } else if(srcPrimitive == DrawPrimitive::TRIANGLE_FAN) {
-            static constexpr std::array<int, 3> viAdd{0, -1, 0xDEAD /* useless */};
-            for(; srcIdx < batchSrcEnd; srcIdx++) {
-                uSz vi = 0;
-                for(uSz j = 0; j < 3; ++j) {
-                    m_stagingVertices.emplace_back(         //
-                        vertices[vi],                       //
-                        colors[vi],                         //
-                        texData[std::min(vi, maxTexIndex)]  //
-                    );
-                    // 0, i, i - 1
-                    vi = srcIdx + viAdd[j];
-                }
-            }
-        } else {
-            for(; srcIdx < batchSrcEnd; srcIdx++) {
-                m_stagingVertices.emplace_back(             //
-                    vertices[srcIdx],                       //
-                    colors[srcIdx],                         //
-                    texData[std::min(srcIdx, maxTexIndex)]  //
-                );
-            }
+        if(!m_stagingMapped) {
+            m_stagingMapped =
+                static_cast<SDLGPUSimpleVertex *>(SDL_MapGPUTransferBuffer(m_device, m_transferBuffer, true));
+            if(!m_stagingMapped) return;
         }
 
-        recordDraw(nullptr, offset, (u32)batchOutVerts);
+        const uSz batchUnits = std::min((MAX_STAGING_VERTS - m_stagingCount) / outStep, numUnits - unitIdx);
+        const uSz unitEnd = unitIdx + batchUnits;
+        const u32 offset = m_stagingCount;
+        dst = m_stagingMapped + offset;
+
+        switch(srcPrimitive) {
+            using enum DrawPrimitive;
+            case QUADS:
+                for(uSz u = unitIdx; u < unitEnd; u++) {
+                    const uSz vi = u * 4;
+                    emit(vi);
+                    emit(vi + 1);
+                    emit(vi + 2);
+                    emit(vi);
+                    emit(vi + 2);
+                    emit(vi + 3);
+                }
+                break;
+            case TRIANGLE_FAN:
+                // 0, i, i - 1
+                for(uSz u = unitIdx; u < unitEnd; u++) {
+                    emit(0);
+                    emit(u + 2);
+                    emit(u + 1);
+                }
+                break;
+            case TRIANGLE_STRIP:
+                // alternate the winding like the strip itself would, so culling behaves identically
+                for(uSz u = unitIdx; u < unitEnd; u++) {
+                    emit(u + (u & 1));
+                    emit(u + 1 - (u & 1));
+                    emit(u + 2);
+                }
+                break;
+            default:
+                for(uSz vi = unitIdx * srcStep, viEnd = unitEnd * srcStep; vi < viEnd; vi++) emit(vi);
+                break;
+        }
+
+        m_stagingCount += static_cast<u32>(batchUnits * outStep);
+        // custom shaders keep the bound texture (or the transparent dummy) even without texcoords, as before
+        recordDraw(nullptr, offset, static_cast<u32>(batchUnits * outStep), hasTexcoords || !defaultShader);
+        unitIdx = unitEnd;
     }
 }
 
@@ -921,74 +933,103 @@ void SDLGPUInterface::recordBakedDraw(SDL_GPUBuffer *buffer, u32 firstVertex, u3
     }
     rebuildPipeline();
 
-    recordDraw(buffer, firstVertex, vertexCount);
+    // baked vertices are in model space, so the shader needs the real mvp
+    m_activeShader->setMVP(m_data->MP);
+    if(m_activeShader == m_defaultShader.get()) m_defaultMVPIsIdentity = false;
+
+    recordDraw(buffer, firstVertex, vertexCount, true);
 }
 
-void SDLGPUInterface::recordDraw(SDL_GPUBuffer *bakedBuffer, u32 vertexOffset, u32 vertexCount) {
+void SDLGPUInterface::recordDraw(SDL_GPUBuffer *bakedBuffer, u32 vertexOffset, u32 vertexCount, bool textured) {
     if(unlikely(!m_cmdBuf || vertexCount == 0)) return;
 
-    DrawCommand &cmd = m_pendingDraws.emplace_back();
-
-    cmd.vertexOffset = vertexOffset;
-    cmd.vertexCount = vertexCount;
-    cmd.bakedBuffer = bakedBuffer;
-    cmd.pipeline = m_currentPipeline;
-
-    // snapshot texture binding (single load per atomic to avoid TOCTOU)
-    auto *boundTex = getBoundTexture();
-    auto *boundSam = getBoundSampler();
-    if(boundTex && boundSam) {
-        cmd.texture = boundTex;
-        cmd.sampler = boundSam;
-    } else {
-        cmd.texture = m_dummyTexture;
-        cmd.sampler = m_dummySampler;
+    // snapshot the active shader's uniform blocks, unless nothing was written to them since the previous snapshot
+    if(m_activeShader != m_lastSnapshotShader || m_activeShader->getUniformGeneration() != m_lastSnapshotGeneration) {
+        m_lastSnapshotShader = m_activeShader;
+        m_lastSnapshotGeneration = m_activeShader->getUniformGeneration();
+        m_lastSnapshotFirst = static_cast<u32>(m_uniformSnapshots.size());
+        m_lastSnapshotCount = 0;
+        for(const auto &block : m_activeShader->getUniformBlocks()) {
+            m_uniformSnapshots.push_back({.dataOffset = static_cast<u32>(m_uniformData.size()),
+                                          .size = static_cast<u16>(block.buffer.size()),
+                                          .slot = static_cast<u8>(block.binding),
+                                          .isVertex = (block.set == 1)});
+            m_uniformData.insert(m_uniformData.end(), block.buffer.data(), block.buffer.data() + block.buffer.size());
+            m_lastSnapshotCount++;
+        }
     }
 
-    // update shader mvp with current transformation matrix
-    m_activeShader->setMVP(m_data->MP);
-
-    // snapshot uniform blocks from active shader
-    cmd.numUniformBlocks = 0;
-    for(const auto &block : m_activeShader->getUniformBlocks()) {
-        if(cmd.numUniformBlocks >= 4) break;
-        auto &ub = cmd.uniformBlocks[cmd.numUniformBlocks];
-        ub.slot = block.binding;
-        ub.isVertex = (block.set == 1);
-        ub.size = (u32)std::min(block.buffer.size(), (uSz)ub.data.size());
-        std::memcpy(ub.data.data(), block.buffer.data(), ub.size);
-        cmd.numUniformBlocks++;
+    // snapshot texture binding (single load per atomic to avoid TOCTOU). a textured draw without a bound texture
+    // (entirely transparent image) samples the transparent dummy, untextured draws sample white
+    SDL_GPUTexture *texture = m_whiteTexture;
+    SDL_GPUSampler *sampler = m_dummySampler;
+    if(textured) {
+        auto *boundTex = getBoundTexture();
+        auto *boundSam = getBoundSampler();
+        if(boundTex && boundSam) {
+            texture = boundTex;
+            sampler = boundSam;
+        } else {
+            texture = m_dummyTexture;
+        }
     }
-
-    // snapshot viewport
-    cmd.viewport = m_viewport;
 
     // snapshot scissor
-    cmd.scissorEnabled = m_scissorEnabled;
+    Scissor scissor{};
     if(m_scissorEnabled && !m_clipRectStack.empty()) {
         const auto &cr = m_clipRectStack.back();
-        Scissor &csc =
-            cmd.scissor = {.pos{(i32)cr.getMinX(), (i32)cr.getMinY()}, .size{(i32)cr.getWidth(), (i32)cr.getHeight()}};
+        scissor = {.pos{(i32)cr.getMinX(), (i32)cr.getMinY()}, .size{(i32)cr.getWidth(), (i32)cr.getHeight()}};
         // clamp for vulkan
-        if(csc.pos.x < 0) {
-            csc.size.x += csc.pos.x;
-            csc.pos.x = 0;
+        if(scissor.pos.x < 0) {
+            scissor.size.x += scissor.pos.x;
+            scissor.pos.x = 0;
         }
-        if(csc.pos.y < 0) {
-            csc.size.y += csc.pos.y;
-            csc.pos.y = 0;
+        if(scissor.pos.y < 0) {
+            scissor.size.y += scissor.pos.y;
+            scissor.pos.y = 0;
         }
-        if(csc.size.x < 0) csc.size.x = 0;
-        if(csc.size.y < 0) csc.size.y = 0;
+        if(scissor.size.x < 0) scissor.size.x = 0;
+        if(scissor.size.y < 0) scissor.size.y = 0;
     }
 
-    // snapshot stencil reference
-    cmd.stencilRef = (u8)(m_stencilState == 1 ? 1 : 0);
+    const u8 stencilRef = (u8)(m_stencilState == 1 ? 1 : 0);
+
+    // an immediate draw that continues the previous command's vertex range with identical state just extends it
+    if(!bakedBuffer && !m_pendingDraws.empty() && !m_renderPassBoundaries.empty() &&
+       m_renderPassBoundaries.back().drawIndex < m_pendingDraws.size()) {
+        DrawCommand &last = m_pendingDraws.back();
+        if(!last.bakedBuffer && last.vertexOffset + last.vertexCount == vertexOffset &&
+           last.pipeline == m_currentPipeline && last.texture == texture && last.sampler == sampler &&
+           last.uniformFirst == m_lastSnapshotFirst && last.uniformCount == m_lastSnapshotCount &&
+           last.viewport == m_viewport && last.stencilRef == stencilRef && last.scissorEnabled == m_scissorEnabled &&
+           (!m_scissorEnabled || last.scissor == scissor)) {
+            last.vertexCount += vertexCount;
+            return;
+        }
+    }
+
+    m_pendingDraws.push_back({
+        .vertexOffset = vertexOffset,
+        .vertexCount = vertexCount,
+        .bakedBuffer = bakedBuffer,
+        .pipeline = m_currentPipeline,
+        .texture = texture,
+        .sampler = sampler,
+        .viewport = m_viewport,
+        .scissor = scissor,
+        .uniformFirst = m_lastSnapshotFirst,
+        .uniformCount = m_lastSnapshotCount,
+        .stencilRef = stencilRef,
+        .scissorEnabled = m_scissorEnabled,
+    });
 }
 
-bool SDLGPUInterface::DrawCommand::UniformBlock::operator==(const UniformBlock &o) const {
-    return (isVertex == o.isVertex) && (size == o.size) && (slot == o.slot) &&
-           (std::memcmp(data.data(), o.data.data(), size) == 0);
+void SDLGPUInterface::resetPendingDraws() {
+    m_pendingDraws.clear();
+    m_stagingCount = 0;
+    m_uniformSnapshots.clear();
+    m_uniformData.clear();
+    m_lastSnapshotShader = nullptr;
 }
 
 void SDLGPUInterface::flushDrawCommands() {
@@ -1014,22 +1055,12 @@ void SDLGPUInterface::flushDrawCommands() {
         m_renderPass = nullptr;
     }
 
-    // check if any draws use the staging buffer (non-baked)
-    bool hasImmediateDraws = false;
-    for(const auto &cmd : m_pendingDraws) {
-        if(!cmd.bakedBuffer) {
-            hasImmediateDraws = true;
-            break;
-        }
+    // single copy pass: upload ALL staging vertices to GPU buffer (the transfer buffer must be unmapped first)
+    if(m_stagingMapped) {
+        SDL_UnmapGPUTransferBuffer(m_device, m_transferBuffer);
+        m_stagingMapped = nullptr;
     }
-
-    // single copy pass: upload ALL staging vertices to GPU buffer
-    if(hasImmediateDraws && !m_stagingVertices.empty()) {
-        if(void *mapped = SDL_MapGPUTransferBuffer(m_device, m_transferBuffer, true)) {
-            std::memcpy(mapped, m_stagingVertices.data(), sizeof(SDLGPUSimpleVertex) * m_stagingVertices.size());
-            SDL_UnmapGPUTransferBuffer(m_device, m_transferBuffer);
-        }
-
+    if(m_stagingCount > 0) {
         if(SDL_GPUCopyPass *copyPass = SDL_BeginGPUCopyPass(m_cmdBuf)) {
             SDL_GPUTransferBufferLocation src{
                 .transfer_buffer = m_transferBuffer,
@@ -1038,9 +1069,9 @@ void SDLGPUInterface::flushDrawCommands() {
             SDL_GPUBufferRegion dst{
                 .buffer = m_vertexBuffer,
                 .offset = 0,
-                .size = static_cast<Uint32>(sizeof(SDLGPUSimpleVertex) * m_stagingVertices.size()),
+                .size = static_cast<Uint32>(sizeof(SDLGPUSimpleVertex) * m_stagingCount),
             };
-            m_statsNumVertexUploads += static_cast<i32>(m_stagingVertices.size());
+            m_statsNumVertexUploads += static_cast<i32>(m_stagingCount);
             SDL_UploadToGPUBuffer(copyPass, &src, &dst, true);
             SDL_EndGPUCopyPass(copyPass);
         }
@@ -1065,6 +1096,23 @@ void SDLGPUInterface::flushDrawCommands() {
 
         // skip if no draws and no pending clears
         if(drawCount == 0 && !state.hasClears()) continue;
+
+        // a pass with nothing but clears folds them into the next pass when that one renders to the same targets,
+        // e.g. clearDepthBuffer() right after a render target enable() would otherwise cost a full pass (and for
+        // msaa targets a pointless resolve + store + reload)
+        if(drawCount == 0 && bi + 1 < numBoundaries) {
+            auto &next = m_renderPassBoundaries[bi + 1].state;
+            if(next.colorTarget == state.colorTarget && next.depthTarget == state.depthTarget &&
+               next.resolveTarget == state.resolveTarget && next.sampleCount == state.sampleCount) {
+                if(state.pendingClearColor && !next.pendingClearColor) {
+                    next.pendingClearColor = true;
+                    next.clearColor = state.clearColor;
+                }
+                next.pendingClearDepth |= state.pendingClearDepth;
+                next.pendingClearStencil |= state.pendingClearStencil;
+                continue;
+            }
+        }
 
         // begin render pass with this boundary's RT state
         SDL_GPUTexture *colorTex = state.colorTarget;
@@ -1098,11 +1146,11 @@ void SDLGPUInterface::flushDrawCommands() {
 
         m_renderPass = SDL_BeginGPURenderPass(m_cmdBuf, &colorTarget, 1, &depthTarget);
         if(!m_renderPass) {
-            m_pendingDraws.clear();
-            m_stagingVertices.clear();
+            resetPendingDraws();
             m_renderPassBoundaries.clear();
             return;
         }
+        ++m_statsNumRenderPasses;
 
         // replay draw commands for this render pass, tracking last-bound state to skip redundant binds
         SDL_GPUGraphicsPipeline *lastPipeline = nullptr;
@@ -1113,7 +1161,7 @@ void SDLGPUInterface::flushDrawCommands() {
         bool lastScissorEnabled = false;
         Scissor lastScissor{.pos = {-1, -1}, .size = {-1, -1}};
         u8 lastStencilRef = 0xFF;
-        std::span<const DrawCommand::UniformBlock> lastUBlock{}, curUBlock{};
+        u32 lastUniformFirst = ~0u;
 
         for(u32 di = drawStart; di < drawEnd; di++) {
             auto &cmd = m_pendingDraws[di];
@@ -1161,23 +1209,19 @@ void SDLGPUInterface::flushDrawCommands() {
                 lastStencilRef = cmd.stencilRef;
             }
 
-            // push uniforms
-            curUBlock = {&cmd.uniformBlocks[0], cmd.numUniformBlocks};
-            bool needsPushUniforms = !curUBlock.empty();
-            if(needsPushUniforms && curUBlock.size() == lastUBlock.size()) {
-                needsPushUniforms = !std::ranges::equal(lastUBlock, curUBlock);
-            }
-
-            if(needsPushUniforms) {
-                lastUBlock = curUBlock;
-                for(const auto &ub : curUBlock) {
-                    if(ub.isVertex) {
-                        SDL_PushGPUVertexUniformData(m_cmdBuf, ub.slot, ub.data.data(), ub.size);
+            // push uniforms (draws sharing a snapshot were deduplicated in recordDraw)
+            if(cmd.uniformCount > 0 && cmd.uniformFirst != lastUniformFirst) {
+                for(u32 ui = cmd.uniformFirst; ui < cmd.uniformFirst + cmd.uniformCount; ui++) {
+                    const auto &snap = m_uniformSnapshots[ui];
+                    const u8 *data = m_uniformData.data() + snap.dataOffset;
+                    if(snap.isVertex) {
+                        SDL_PushGPUVertexUniformData(m_cmdBuf, snap.slot, data, snap.size);
                     } else {
-                        SDL_PushGPUFragmentUniformData(m_cmdBuf, ub.slot, ub.data.data(), ub.size);
+                        SDL_PushGPUFragmentUniformData(m_cmdBuf, snap.slot, data, snap.size);
                     }
                     ++m_statsNumUniformUploads;
                 }
+                lastUniformFirst = cmd.uniformFirst;
             }
 
             // bind texture/sampler
@@ -1208,8 +1252,7 @@ void SDLGPUInterface::flushDrawCommands() {
     }
 
     // clear pending state
-    m_pendingDraws.clear();
-    m_stagingVertices.clear();
+    resetPendingDraws();
     m_renderPassBoundaries.clear();
 }
 
@@ -1355,10 +1398,7 @@ void SDLGPUInterface::setColorWriting(bool r, bool g, bool b, bool a) {
 }
 
 void SDLGPUInterface::setColorInversion(bool enabled) {
-    if(m_colorInversion == enabled) return;
-
-    m_colorInversion = enabled;
-    setTexturing(m_texturingEnabled, true /* force */);  // re-apply with new inversion state
+    m_colorInversion = enabled;  // applied by applyDefaultFragState() on the next draw
 }
 
 void SDLGPUInterface::setCulling(bool enabled) {
@@ -1572,31 +1612,25 @@ void SDLGPUInterface::onTransformUpdate() {
     // will be updated in draw() or when necessary
 }
 
-void SDLGPUInterface::setTexturing(bool enabled, bool force) {
-    if(!force && enabled == m_texturingEnabled) return;
-
-    m_texturingEnabled = enabled;
-    this->updateMiscUniform();
+void SDLGPUInterface::setTexturing(bool /*enabled*/, bool /*force*/) {
+    // texturing is derived per draw from the vao's texcoords (see drawVAO), this only exists for the shared 2d
+    // drawing interface
 }
 
-void SDLGPUInterface::updateMiscUniform() {
-    m_defaultShader->setUniform4f("misc", m_texturingEnabled ? 1.f : 0.f, m_colorInversion ? 1.f : 0.f,
-                                  m_drawColorless ? 1.f : 0.f, 0.f);
-}
+void SDLGPUInterface::applyDefaultFragState(bool texturing, bool colorless, Color col) {
+    const DefaultFragState state{
+        .texturing = texturing, .inversion = m_colorInversion, .colorless = colorless, .col = col};
+    if(state == m_defaultFragState) return;
 
-void SDLGPUInterface::setDrawColorless(bool colorless) {
-    if(colorless == m_drawColorless) return;
+    if(state.texturing != m_defaultFragState.texturing || state.inversion != m_defaultFragState.inversion ||
+       state.colorless != m_defaultFragState.colorless) {
+        m_defaultShader->setUniform4f("misc", texturing ? 1.f : 0.f, m_colorInversion ? 1.f : 0.f,
+                                      colorless ? 1.f : 0.f, 0.f);
+    }
+    if(state.col != m_defaultFragState.col)
+        m_defaultShader->setUniform4f("col", col.Rf(), col.Gf(), col.Bf(), col.Af());
 
-    m_drawColorless = colorless;
-    this->updateMiscUniform();
-}
-
-void SDLGPUInterface::syncColUniform() {
-    if(!m_colUniformDirty) return;
-
-    m_colUniformDirty = false;
-    m_defaultShader->setUniform4f("col", m_data->color.Rf(), m_data->color.Gf(), m_data->color.Bf(),
-                                  m_data->color.Af());
+    m_defaultFragState = state;
 }
 
 // shader switching

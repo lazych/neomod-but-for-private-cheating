@@ -50,9 +50,16 @@ using SDL_PropertiesID = u32;
 
 struct SDLGPUSimpleVertex {
     vec3 pos;
-    vec4 col;
+    std::array<u8, 4> col;  // rgba8 unorm, the shaders see a normalized vec4
     vec2 tex;
+
+    [[nodiscard]] static constexpr std::array<u8, 4> packColor(Color c) { return {c.r, c.g, c.b, c.a}; }
+    [[nodiscard]] static constexpr std::array<u8, 4> packColorMul(Color c, Color m) {
+        constexpr auto mul = [](u32 a, u32 b) { return static_cast<u8>((a * b + 127) / 255); };
+        return {mul(c.r, m.r), mul(c.g, m.g), mul(c.b, m.b), mul(c.a, m.a)};
+    }
 };
+static_assert(sizeof(SDLGPUSimpleVertex) == 24);
 
 class SDLGPUInterface final : public ModernGraphicsShared {
     NOCOPY_NOMOVE(SDLGPUInterface)
@@ -189,13 +196,12 @@ class SDLGPUInterface final : public ModernGraphicsShared {
     void rebuildPipeline();
     void flushDrawCommands();
     void addRenderPassBoundary();
-    void recordDraw(SDL_GPUBuffer *bakedBuffer, u32 vertexOffset, u32 vertexCount);
+    void recordDraw(SDL_GPUBuffer *bakedBuffer, u32 vertexOffset, u32 vertexCount, bool textured);
+    void resetPendingDraws();
     bool createDepthTexture(u32 width, u32 height);
 
-    // default shader uniform state (misc = texturing/inversion/colorless flags, col = m_color, lazily synced)
-    void updateMiscUniform();
-    void setDrawColorless(bool colorless);
-    void syncColUniform();
+    // default shader fragment uniforms (misc = texturing/inversion/colorless flags, col = tint), written on change
+    void applyDefaultFragState(bool texturing, bool colorless, Color col);
 
     void initSmoothClipShader();
     void onFramecountNumChanged(float maxFramesInFlight);
@@ -278,9 +284,11 @@ class SDLGPUInterface final : public ModernGraphicsShared {
     u32 m_depthTextureWidth{0};
     u32 m_depthTextureHeight{0};
 
-    // vertex staging buffer for deferred batching (how much to do in 1 go)
+    // immediate vertices are written straight into the mapped transfer buffer (up to MAX_STAGING_VERTS per flush),
+    // flushDrawCommands() unmaps it and uploads m_stagingCount vertices into m_vertexBuffer
     static constexpr uSz MAX_STAGING_VERTS{(8ULL * 1024 * 1024) / sizeof(SDLGPUSimpleVertex)};
-    std::vector<SDLGPUSimpleVertex> m_stagingVertices;
+    SDLGPUSimpleVertex *m_stagingMapped{nullptr};
+    u32 m_stagingCount{0};
 
     SDL_GPUBuffer *m_vertexBuffer{nullptr};
     SDL_GPUTransferBuffer *m_transferBuffer{nullptr};
@@ -301,16 +309,6 @@ class SDLGPUInterface final : public ModernGraphicsShared {
 
     // deferred draw batching
     struct DrawCommand {
-        // uniform block snapshots
-        struct UniformBlock {
-            alignas(16) std::array<u8, 80> data;
-            u32 slot;
-            u32 size;
-            bool isVertex;  // true=vertex, false=fragment
-            [[nodiscard]] bool operator==(const UniformBlock &) const;
-        };
-        UniformBlock uniformBlocks[4];
-
         u32 vertexOffset;
         u32 vertexCount;
 
@@ -327,18 +325,32 @@ class SDLGPUInterface final : public ModernGraphicsShared {
         // scissor
         Scissor scissor;
 
+        // uniform snapshot range (into m_uniformSnapshots) this draw needs pushed
+        u32 uniformFirst;
+        u8 uniformCount;
+
         // stencil
         u8 stencilRef;
-
-        // these are moved down here for struct padding reduction
-
-        // number of actual uniform blocks (up to 4)
-        u8 numUniformBlocks;
 
         // scissor state
         bool scissorEnabled;
     };
     std::vector<DrawCommand> m_pendingDraws;
+
+    // uniform block snapshots referenced by the draw commands. recordDraw() reuses the previous range while the active
+    // shader's uniform generation is unchanged, so runs of draws with identical uniforms share one snapshot
+    struct UniformSnapshot {
+        u32 dataOffset;  // into m_uniformData
+        u16 size;
+        u8 slot;
+        bool isVertex;  // true=vertex, false=fragment
+    };
+    std::vector<UniformSnapshot> m_uniformSnapshots;
+    std::vector<u8> m_uniformData;
+    SDLGPUShader *m_lastSnapshotShader{nullptr};
+    u32 m_lastSnapshotGeneration{0};
+    u32 m_lastSnapshotFirst{0};
+    u8 m_lastSnapshotCount{0};
 
     // pipeline state that requires rebuild
     int m_stencilState{0};  // 0=off, 1=writing mask, 2=testing
@@ -356,20 +368,31 @@ class SDLGPUInterface final : public ModernGraphicsShared {
     Viewport m_viewport{.pos = {0.f, 0.f}, .size = {1.f, 1.f}};
 
     int m_maxFrameLatency{Env::cfg(OS::MAC) ? 2 : 1};
-    bool m_texturingEnabled{false};
     bool m_colorInversion{false};
-    bool m_drawColorless{false};
-    bool m_colUniformDirty{true};
     bool m_vsyncEnabled{false};
+
+    // default shader fragment uniforms as last written. immediate draws keep them constant (always sampling, white
+    // col, m_color goes into the vertices instead) so that consecutive draws can merge, see drawVAO()
+    struct DefaultFragState {
+        bool texturing;
+        bool inversion;
+        bool colorless;
+        Color col;
+        [[nodiscard]] bool operator==(const DefaultFragState &) const = default;
+    };
+    DefaultFragState m_defaultFragState{.texturing = false, .inversion = false, .colorless = false, .col = 0};
+    // whether the default shader's mvp currently holds the identity (immediate draws are pre-transformed on the cpu)
+    bool m_defaultMVPIsIdentity{false};
 
     // cached present mode support (queried once at init)
     bool m_supportsSDRComposition{false};
     bool m_supportsImmediate{false};
     bool m_supportsMailbox{false};
 
-    // 1x1 transparent black dummy texture+sampler (bound when no texture is, i.e. texturing disabled or entirely
-    // transparent images)
+    // 1x1 textures for draws without a real texture: transparent black when a texture is expected but none is bound
+    // (entirely transparent images), white for untextured immediate draws (the default shader always samples)
     SDL_GPUTexture *m_dummyTexture{nullptr};
+    SDL_GPUTexture *m_whiteTexture{nullptr};
     SDL_GPUSampler *m_dummySampler{nullptr};
 
     // currently bound texture+sampler (set by SDLGPUImage)
@@ -439,6 +462,7 @@ class SDLGPUInterface final : public ModernGraphicsShared {
     int m_statsNumDrawCalls{0};
     int m_statsNumUniformUploads{0};
     int m_statsNumVertexUploads{0};
+    int m_statsNumRenderPasses{0};
 
     // headless mode cache
     bool m_isHeadless{false};

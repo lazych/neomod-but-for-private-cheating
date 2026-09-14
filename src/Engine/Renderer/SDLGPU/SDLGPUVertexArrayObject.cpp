@@ -88,13 +88,11 @@ void SDLGPUVertexArrayObject::init() {
     // entirely, and for !keepInSystemMemory, interleaves directly into the mapped transfer buffer.
     std::vector<vec3> convVertices;
     std::vector<vec2> convTexcoords;
-    std::vector<vec4> convColors;
+    std::vector<Color> convColors;
 
     std::span<const vec3> srcVerts;
     std::span<const vec2> srcTCs;
-    std::span<const vec4> srcColors;
-
-    constexpr const auto toVec4 = [] [[gnu::always_inline]] (Color c) { return vec4(c.Rf(), c.Gf(), c.Bf(), c.Af()); };
+    std::span<const Color> srcColors;
 
     if(this->primitive == DrawPrimitive::QUADS) {
         m_convertedPrimitive = DrawPrimitive::TRIANGLES;
@@ -130,12 +128,12 @@ void SDLGPUVertexArrayObject::init() {
                 }
 
                 if(!this->colors.empty()) {
-                    convColors.push_back(toVec4(this->colors[std::min(i + 0, maxColorIdx)]));
-                    convColors.push_back(toVec4(this->colors[std::min(i + 1, maxColorIdx)]));
-                    convColors.push_back(toVec4(this->colors[std::min(i + 2, maxColorIdx)]));
-                    convColors.push_back(toVec4(this->colors[std::min(i + 0, maxColorIdx)]));
-                    convColors.push_back(toVec4(this->colors[std::min(i + 2, maxColorIdx)]));
-                    convColors.push_back(toVec4(this->colors[std::min(i + 3, maxColorIdx)]));
+                    convColors.push_back(this->colors[std::min(i + 0, maxColorIdx)]);
+                    convColors.push_back(this->colors[std::min(i + 1, maxColorIdx)]);
+                    convColors.push_back(this->colors[std::min(i + 2, maxColorIdx)]);
+                    convColors.push_back(this->colors[std::min(i + 0, maxColorIdx)]);
+                    convColors.push_back(this->colors[std::min(i + 2, maxColorIdx)]);
+                    convColors.push_back(this->colors[std::min(i + 3, maxColorIdx)]);
                 }
             }
         }
@@ -167,9 +165,9 @@ void SDLGPUVertexArrayObject::init() {
                 }
 
                 if(!this->colors.empty()) {
-                    convColors.push_back(toVec4(this->colors[std::min<size_t>(0, maxColorIdx)]));
-                    convColors.push_back(toVec4(this->colors[std::min(i, maxColorIdx)]));
-                    convColors.push_back(toVec4(this->colors[std::min(i - 1, maxColorIdx)]));
+                    convColors.push_back(this->colors[std::min<size_t>(0, maxColorIdx)]);
+                    convColors.push_back(this->colors[std::min(i, maxColorIdx)]);
+                    convColors.push_back(this->colors[std::min(i - 1, maxColorIdx)]);
                 }
             }
         }
@@ -179,15 +177,7 @@ void SDLGPUVertexArrayObject::init() {
     } else {
         srcVerts = this->vertices;
         srcTCs = this->texcoords;
-
-        if(!this->colors.empty()) {
-            const size_t maxColorIdx = this->colors.size() - 1;
-            convColors.resize(this->vertices.size());
-            for(size_t i = 0; i < this->vertices.size(); i++) {
-                convColors[i] = toVec4(this->colors[std::min(i, maxColorIdx)]);
-            }
-            srcColors = convColors;
-        }
+        srcColors = this->colors;  // interleave() clamps the index, so a short color array is fine as-is
     }
 
     const size_t numVerts = srcVerts.size();
@@ -231,25 +221,25 @@ void SDLGPUVertexArrayObject::init() {
         if(hasColors && hasTCs) {
             for(size_t i = 0; i < numVerts; i++) {
                 dst[i].pos = srcVerts[i];
-                dst[i].col = srcColors[std::min(i, maxColorIdx)];
+                dst[i].col = SDLGPUSimpleVertex::packColor(srcColors[std::min(i, maxColorIdx)]);
                 dst[i].tex = srcTCs[i];
             }
         } else if(hasColors) {
             for(size_t i = 0; i < numVerts; i++) {
                 dst[i].pos = srcVerts[i];
-                dst[i].col = srcColors[std::min(i, maxColorIdx)];
+                dst[i].col = SDLGPUSimpleVertex::packColor(srcColors[std::min(i, maxColorIdx)]);
                 dst[i].tex = vec2(0.f, 0.f);
             }
         } else if(hasTCs) {
             for(size_t i = 0; i < numVerts; i++) {
                 dst[i].pos = srcVerts[i];
-                dst[i].col = vec4(1.f, 1.f, 1.f, 1.f);
+                dst[i].col = {255, 255, 255, 255};
                 dst[i].tex = srcTCs[i];
             }
         } else {
             for(size_t i = 0; i < numVerts; i++) {
                 dst[i].pos = srcVerts[i];
-                dst[i].col = vec4(1.f, 1.f, 1.f, 1.f);
+                dst[i].col = {255, 255, 255, 255};
                 dst[i].tex = vec2(0.f, 0.f);
             }
         }
@@ -335,8 +325,7 @@ void SDLGPUVertexArrayObject::uploadPartialUpdates() {
             const auto colorIdx = static_cast<u32>(idx);
             if(colorIdx > maxColorIdx) continue;
 
-            const Color c = this->colors[colorIdx];
-            const vec4 col(c.Rf(), c.Gf(), c.Bf(), c.Af());
+            const auto col = SDLGPUSimpleVertex::packColor(this->colors[colorIdx]);
 
             // baking clamps the color index, so the last color also feeds every vertex past the end of the array
             const u32 srcEnd = (colorIdx == maxColorIdx) ? numBakedSrc : colorIdx + 1;

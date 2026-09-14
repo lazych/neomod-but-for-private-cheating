@@ -82,6 +82,8 @@ class SDLGPUShader final : public Shader {
 
     // access uniform blocks for snapshotting into deferred draw commands
     [[nodiscard]] const FixedSizeArray<UniformBlock> &getUniformBlocks() const { return m_uniformBlocks; }
+    // bumped whenever a uniform value actually changes, so the interface can reuse its previous snapshot
+    [[nodiscard]] u32 getUniformGeneration() const { return m_uniformGeneration; }
 
    protected:
     void writeUniform(std::string_view name, UniformType type, const void *const data, u32 dataSize) override;
@@ -113,6 +115,8 @@ class SDLGPUShader final : public Shader {
         u32 varSize;
     };
     Hash::unstable_stringmap<UniformCacheEntry> m_uniformCache;
+
+    u32 m_uniformGeneration{0};
 };
 
 #endif
