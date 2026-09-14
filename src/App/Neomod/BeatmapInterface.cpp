@@ -2486,7 +2486,8 @@ void BeatmapInterface::update() {
        !osu->getModAutopilot()) {
         this->updateAimAssist();
     } else {
-        this->bAimAssistActive = false;
+        this->bAimAssistEngaged = false;
+        this->vAimAssistOffset = vec2{0.f};
     }
 
     // spinner detection (used by osu!stable drain, and by HUD for not drawing the hiterrorbar)
@@ -3805,9 +3806,8 @@ vec2 BeatmapInterface::getCursorPos() const {
         return this->vAutoCursorPos;
     } else {
         vec2 pos = this->getMousePos();
-        if(cv::aimassist.getBool() && this->bAimAssistActive && !this->bIsPaused && !this->is_watching) {
-            const f32 strength = std::clamp<f32>(cv::aimassist_strength.getFloat(), 0.0f, 1.0f);
-            pos += (this->vAimAssistTarget - pos) * strength;
+        if(cv::aimassist.getBool() && this->bAimAssistEngaged && !this->bIsPaused && !this->is_watching) {
+            pos += this->vAimAssistOffset;
         }
         if(cv::mod_shirone.getBool() && osu->getScore()->getCombo() > 0) {
             return pos + vec2(std::sin((this->iCurMusicPos / 20.0f) * 1.15f) *
@@ -4198,45 +4198,101 @@ void BeatmapInterface::updateAutoCursorPos() {
 }
 
 void BeatmapInterface::updateAimAssist() {
-    this->bAimAssistActive = false;
-
     if(!this->bIsPlaying && !this->bIsPaused) return;
-    if(unlikely(this->hitobjects.empty())) return;
 
     const i32 curMusicPos = this->iCurMusicPosWithOffsets;
     const f32 radius = std::max(cv::aimassist_radius.getFloat(), 0.0f);
+    const f32 deadZone = std::max(cv::aimassist_deadzone.getFloat(), 0.0f);
     const i32 windowMS = std::max(cv::aimassist_window_ms.getInt(), 0);
-    const vec2 cursor = this->getMousePos();
-    const f32 radiusSq = radius * radius;
+    const vec2 mouse = this->getMousePos();
 
+    // find the closest eligible hitobject within the engage radius
+    const f32 radiusSq = radius * radius;
     vec2 bestTarget{0.f};
     f32 bestDistSq = radiusSq;
+    f32 bestDist = 0.0f;
 
-    for(const auto &obj : this->hitobjects) {
-        HitObject *o = obj.get();
+    if(radius > 0.0f && !this->hitobjects.empty()) {
+        for(const auto &obj : this->hitobjects) {
+            HitObject *o = obj.get();
 
-        if(o->isFinished()) continue;
+            if(o->isFinished()) continue;
 
-        const i32 clickTime = o->getClickTime();
-        const i32 endTime = o->getEndTime();
+            const i32 clickTime = o->getClickTime();
+            const i32 endTime = o->getEndTime();
 
-        if(curMusicPos > endTime) continue;               // already over
-        if(curMusicPos < clickTime - windowMS) continue;  // too far in the future
+            if(curMusicPos > endTime) continue;               // already over
+            if(curMusicPos < clickTime - windowMS) continue;  // too far in the future
 
-        const vec2 p = this->osuCoords2Pixels(o->getRawPosAt(curMusicPos));
-        const f32 dx = p.x - cursor.x;
-        const f32 dy = p.y - cursor.y;
-        const f32 distanceSq = dx * dx + dy * dy;
-        if(distanceSq < bestDistSq) {
-            bestDistSq = distanceSq;
-            bestTarget = p;
+            const vec2 p = this->osuCoords2Pixels(o->getRawPosAt(curMusicPos));
+            const f32 dx = p.x - mouse.x;
+            const f32 dy = p.y - mouse.y;
+            const f32 distanceSq = dx * dx + dy * dy;
+            if(distanceSq < bestDistSq) {
+                bestDistSq = distanceSq;
+                bestDist = std::sqrt(distanceSq);
+                bestTarget = p;
+            }
         }
     }
 
-    if(bestDistSq < radiusSq) {
-        this->vAimAssistTarget = bestTarget;
-        this->bAimAssistActive = true;
+    const f32 dt = std::clamp<f32>((f32)engine->getFrameTime(), 0.0f, 1.0f / 30.0f);
+
+    if(radius <= 0.0f || bestDistSq >= radiusSq) {
+        // no target in range: exponentially ease the pull offset back to zero
+        this->vAimAssistOffset *= std::exp(-15.0f * dt);
+        if(vec::length(this->vAimAssistOffset) < 0.5f) this->vAimAssistOffset = vec2{0.f};
+        this->bAimAssistEngaged = false;
+        return;
     }
+
+    // distance falloff curve: 0 pull at the dead zone and at the radius edge, peak in between
+    const f32 peakDist = std::max(radius * 0.5f, deadZone * 1.01f);
+    auto smoothstep01 = [](f32 x) {
+        const f32 t = std::clamp<f32>(x, 0.0f, 1.0f);
+        return t * t * (3.0f - 2.0f * t);
+    };
+    const f32 inner = (bestDist > deadZone) ? smoothstep01((bestDist - deadZone) / (peakDist - deadZone)) : 0.0f;
+    const f32 outer = (bestDist < radius) ? smoothstep01((radius - bestDist) / (radius - peakDist)) : 0.0f;
+    const f32 strength = std::clamp<f32>(cv::aimassist_strength.getFloat(), 0.0f, 1.0f) * inner * outer;
+
+    if(strength <= 0.001f) {
+        // essentially no pull right now: ease the offset back to zero
+        this->vAimAssistOffset *= std::exp(-15.0f * dt);
+        if(vec::length(this->vAimAssistOffset) < 0.5f) this->vAimAssistOffset = vec2{0.f};
+        this->bAimAssistEngaged = false;
+        return;
+    }
+
+    // desired pull displacement for this frame
+    const vec2 desiredOffset = (bestTarget - mouse) * strength;
+
+    // smooth the offset toward the desired value (time-based, frame-rate independent)
+    const f32 response = 15.0f;
+    const f32 maxStep = 800.0f * dt;
+    const f32 f = 1.0f - std::exp(-response * dt);
+    const vec2 delta = desiredOffset - this->vAimAssistOffset;
+    const f32 deltaLen = vec::length(delta);
+    if(deltaLen > 0.0f) {
+        const f32 step = std::min(deltaLen * f, maxStep);
+        this->vAimAssistOffset += vec::normalize(delta) * step;
+    }
+
+    // hard dead-zone clamp: never let the assisted cursor sit on the target center
+    if(deadZone > 0.0f) {
+        const vec2 cursorNew = mouse + this->vAimAssistOffset;
+        const vec2 toTarget = cursorNew - bestTarget;
+        const f32 cursorTargetDist = vec::length(toTarget);
+        if(cursorTargetDist < deadZone) {
+            const vec2 mouseToTarget = mouse - bestTarget;
+            if(vec::length(mouseToTarget) > deadZone) {
+                const vec2 dir = cursorTargetDist > 0.0001f ? vec::normalize(toTarget) : vec2{1.0f, 0.0f};
+                this->vAimAssistOffset = (bestTarget + dir * deadZone) - mouse;
+            }
+        }
+    }
+
+    this->bAimAssistEngaged = true;
 }
 
 void BeatmapInterface::updatePlayfieldMetrics() {

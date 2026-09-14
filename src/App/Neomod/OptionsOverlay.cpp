@@ -1634,7 +1634,8 @@ OptionsOverlayImpl::OptionsOverlayImpl(OptionsOverlay *parent) : parent(parent) 
     this->addSpacer();
     this->addSubSection(_("Aim Assist"), "aim assist aimassist practice help magnetic cursor");
     this->addCheckbox(_("Enable Aim Assist"),
-                      _("Magnetizes the cursor toward nearby upcoming/active hitobjects.\n"
+                      _("Smoothly pulls the cursor toward nearby upcoming/active hitobjects.\n"
+                        "Keeps a small gap from the note center so it never locks on.\n"
                         "Practice tool, not a mod. No score submission."),
                       &cv::aimassist);
     this->addSlider(_("Assist Strength:"), 0.0f, 1.0f, &cv::aimassist_strength, 220.0f)
@@ -1642,6 +1643,7 @@ OptionsOverlayImpl::OptionsOverlayImpl(OptionsOverlay *parent) : parent(parent) 
     this->addSlider(_("Engage Radius:"), 0.0f, 300.0f, &cv::aimassist_radius, 220.0f);
     this->addSlider(_("Target Window:"), 0.0f, 1000.0f, &cv::aimassist_window_ms, 220.0f)
         ->setChangeCallback(SA::MakeDelegate<&OptionsOverlayImpl::onSliderChangeIntMS>(this));
+    this->addSlider(_("Dead Zone:"), 0.0f, 100.0f, &cv::aimassist_deadzone, 220.0f);
     this->addSpacer();
     this->addSubSection(_("Backgrounds"), "image thumbnail");
     this->addCheckbox(_("Load Background Images (!)"),

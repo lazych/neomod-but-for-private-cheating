@@ -413,8 +413,8 @@ class BeatmapInterface final : public AbstractBeatmapInterface {
     int iAutoCursorDanceIndex;
 
     // aim assist
-    vec2 vAimAssistTarget{0.f};
-    bool bAimAssistActive{false};
+    vec2 vAimAssistOffset{0.f};
+    bool bAimAssistEngaged{false};
 
     // live and precomputed pp/stars
     void resetLiveStarsTasks();

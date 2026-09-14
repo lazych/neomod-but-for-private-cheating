@@ -438,12 +438,14 @@ CONVAR(autopilot_snapping_strength, 2.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY
        "How many iterations of quadratic interpolation to use, more = snappier, 0 = linear");
 CONVAR(aimassist, false, CLIENT | SERVER | PROTECTED | GAMEPLAY,
        "magnetize cursor toward the nearest upcoming/active hitobject");
-CONVAR(aimassist_strength, 0.5f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
-       "how strongly the cursor is pulled toward the target (0 = off, 1 = snap)");
+CONVAR(aimassist_strength, 0.45f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
+       "how strongly the cursor is pulled toward the target (0 = off, 1 = max pull)");
 CONVAR(aimassist_radius, 120.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
        "screen-pixel distance from a hitobject at which aim assist engages");
 CONVAR(aimassist_window_ms, 400, CLIENT | SERVER | PROTECTED | GAMEPLAY,
        "how early (ms) before a hitobject's click time it may be targeted");
+CONVAR(aimassist_deadzone, 14.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
+       "screen pixels from a hitobject center at which the assist disengages, prevents center-locking");
 CONVAR(cs_override, -1.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
        "use this to override between CS 0 and CS 12.1429. active if value is more than or equal to 0.");
 CONVAR(cs_overridenegative, 0.0f, CLIENT | SERVER | PROTECTED | GAMEPLAY,
